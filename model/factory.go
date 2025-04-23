@@ -53,7 +53,7 @@ func (f *DefaultModelFactory) CreateModel(ctx context.Context, modelName string)
 
 	switch modelType {
 	case ModelTypeGemini:
-		return NewGoogleLLM(ctx, f.apiKey, modelName)
+		return NewGeminiLLM(ctx, f.apiKey, modelName)
 	case ModelTypeClaude:
 		return NewClaudeLLM(ctx, f.apiKey, modelName)
 	default:
@@ -78,7 +78,7 @@ func (f *DefaultModelFactory) CreateGenerativeModel(ctx context.Context, modelNa
 
 	switch modelType {
 	case ModelTypeGemini:
-		return NewGoogleLLM(ctx, f.apiKey, modelName)
+		return NewGeminiLLM(ctx, f.apiKey, modelName)
 	case ModelTypeClaude:
 		return NewClaudeLLM(ctx, f.apiKey, modelName)
 	default:

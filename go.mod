@@ -5,7 +5,7 @@ go 1.24
 require (
 	github.com/anthropics/anthropic-sdk-go v0.2.0-beta.3
 	github.com/bytedance/sonic v1.13.2
-	google.golang.org/genai v1.1.0
+	google.golang.org/genai v1.2.0
 )
 
 require (

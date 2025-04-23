@@ -7,85 +7,122 @@ import (
 	"context"
 	"fmt"
 	"iter"
-	"regexp"
+	"os"
+	"strings"
+	"sync"
 
 	"google.golang.org/genai"
 )
 
-// GoogleLLM represents a Google Large Language Model (Gemini).
-// It's an equivalent of the Python ADK Gemini class in google_llm.py.
-type GoogleLLM struct {
+// GeminiLLM represents a Google Gemini Large Language Model.
+type GeminiLLM struct {
 	*BaseLLM
-
-	// Default model is 'gemini-1.5-flash'
-	modelName string
+	apiClient       *genai.Client
+	apiClientOnce   sync.Once
+	apiClientError  error
+	trackingHeaders map[string]string
 }
 
-// NewGoogleLLM creates a new Google LLM instance.
-func NewGoogleLLM(ctx context.Context, apiKey string, modelName string) (*GoogleLLM, error) {
-	// If model name is not provided, use the default
+var _ GenerativeModel = (*GeminiLLM)(nil)
+
+// NewGeminiLLM creates a new Gemini LLM instance.
+func NewGeminiLLM(ctx context.Context, apiKey string, modelName string) (*GeminiLLM, error) {
+	// Use default model if none provided
 	if modelName == "" {
-		modelName = "gemini-1.5-flash"
+		modelName = "gemini-1.5-pro"
 	}
 
-	// Create the client
-	client, err := genai.NewClient(ctx, &genai.ClientConfig{
+	// Create genai client for BaseLLM
+	genaiClient, err := genai.NewClient(ctx, &genai.ClientConfig{
 		APIKey: apiKey,
 	})
 	if err != nil {
-		return nil, fmt.Errorf("failed to create Google Genai client: %w", err)
+		return nil, fmt.Errorf("failed to create genai client: %w", err)
 	}
 
-	return &GoogleLLM{
-		BaseLLM:   NewBaseLLM(modelName, client),
-		modelName: modelName,
+	return &GeminiLLM{
+		BaseLLM:         NewBaseLLM(modelName, genaiClient),
+		trackingHeaders: make(map[string]string),
 	}, nil
 }
 
-// SupportedModels returns a list of supported Google LLM models.
-// This matches the patterns in the Python implementation.
-func (m *GoogleLLM) SupportedModels() []string {
+// SupportedModels returns a list of supported Gemini models.
+func (m *GeminiLLM) SupportedModels() []string {
 	return []string{
-		// Gemini models
-		`gemini-.*`,
-		// Fine-tuned vertex endpoint pattern
-		`projects\/.*\/locations\/.*\/endpoints\/.*`,
-		// Vertex gemini long name
-		`projects\/.*\/locations\/.*\/publishers\/google\/models\/gemini-.*`,
+		"gemini-1.0-pro",
+		"gemini-1.5-pro",
+		"gemini-1.5-flash",
 	}
 }
 
-// IsSupported checks if the given model name is supported.
-func (m *GoogleLLM) IsSupported(modelName string) bool {
-	for _, pattern := range m.SupportedModels() {
-		match, err := regexp.MatchString(pattern, modelName)
-		if err == nil && match {
-			return true
-		}
-	}
-	return false
-}
-
-// Connect creates a live connection to the Google LLM.
-func (m *GoogleLLM) Connect(llmRequest *LLMRequest) (BaseLLMConnection, error) {
-	llmRequest.LiveConnectConfig.SystemInstruction = &genai.Content{
-		Role:  "system",
-		Parts: []*genai.Part{
-			// genai.NewPartFromText(llmRequest.CountTokensConfig.SystemInstruction),
-		},
-	}
-
-	// Create a new GeminiLLMConnection
-	conn, err := NewGeminiLLMConnection(m)
+// Connect creates a live connection to the Gemini LLM.
+func (m *GeminiLLM) Connect() (BaseLLMConnection, error) {
+	// Ensure we have an API client
+	apiClient, err := m.getAPIClient()
 	if err != nil {
-		return nil, fmt.Errorf("failed to create GeminiLLMConnection: %w", err)
+		return nil, err
 	}
 
-	return conn, nil
+	// Create and return a new connection
+	return newGeminiLLMConnection(m.model, apiClient), nil
+}
+
+// getAPIClient returns a cached API client.
+func (m *GeminiLLM) getAPIClient() (*genai.Client, error) {
+	m.apiClientOnce.Do(func() {
+		apiKey := os.Getenv("GOOGLE_API_KEY")
+		if apiKey == "" {
+			m.apiClientError = fmt.Errorf("GOOGLE_API_KEY environment variable not set")
+			return
+		}
+
+		ctx := context.Background()
+		client, err := genai.NewClient(ctx, &genai.ClientConfig{
+			APIKey: apiKey,
+		})
+		if err != nil {
+			m.apiClientError = fmt.Errorf("failed to create genai client: %w", err)
+			return
+		}
+
+		m.apiClient = client
+	})
+
+	return m.apiClient, m.apiClientError
+}
+
+// maybeAppendUserContent checks if the last message is from the user and if not, appends an empty user message.
+func (m *GeminiLLM) maybeAppendUserContent(contents []*genai.Content) []*genai.Content {
+	if len(contents) == 0 {
+		return []*genai.Content{{
+			Role:  "user",
+			Parts: []*genai.Part{},
+		}}
+	}
+
+	lastContent := contents[len(contents)-1]
+	if strings.ToLower(lastContent.Role) != "user" {
+		return append(contents, &genai.Content{
+			Role:  "user",
+			Parts: []*genai.Part{},
+		})
+	}
+
+	return contents
 }
 
 // Generate generates content from the model.
-func (m *GoogleLLM) Generate(ctx context.Context, request GenerateRequest) (*GenerateResponse, error) {
+func (m *GeminiLLM) Generate(ctx context.Context, request GenerateRequest) (*GenerateResponse, error) {
+	// Ensure we have an API client
+	apiClient, err := m.getAPIClient()
+	if err != nil {
+		return nil, err
+	}
+
+	// Get access to the Models service
+	models := apiClient.Models
+
+	// Create config for generate content
 	config := &genai.GenerateContentConfig{}
 
 	// Apply generation config if provided
@@ -97,14 +134,17 @@ func (m *GoogleLLM) Generate(ctx context.Context, request GenerateRequest) (*Gen
 	}
 
 	// Apply safety settings if provided
-	if request.SafetySettings != nil {
+	if request.SafetySettings != nil && len(request.SafetySettings) > 0 {
 		config.SafetySettings = request.SafetySettings
 	}
 
+	// Ensure the last message is from the user
+	contents := m.maybeAppendUserContent(request.Content)
+
 	// Generate content
-	resp, err := m.client.Models.GenerateContent(ctx, m.modelName, request.Content, config)
+	resp, err := models.GenerateContent(ctx, m.model, contents, config)
 	if err != nil {
-		return nil, fmt.Errorf("failed to generate content: %w", err)
+		return nil, fmt.Errorf("gemini API error: %w", err)
 	}
 
 	return &GenerateResponse{
@@ -113,12 +153,46 @@ func (m *GoogleLLM) Generate(ctx context.Context, request GenerateRequest) (*Gen
 }
 
 // GenerateContent generates content from the model.
-func (m *GoogleLLM) GenerateContent(ctx context.Context, contents []*genai.Content, config *genai.GenerateContentConfig) (*genai.GenerateContentResponse, error) {
-	return m.client.Models.GenerateContent(ctx, m.modelName, contents, config)
+func (m *GeminiLLM) GenerateContent(ctx context.Context, contents []*genai.Content, config *genai.GenerateContentConfig) (*genai.GenerateContentResponse, error) {
+	// Ensure we have an API client
+	apiClient, err := m.getAPIClient()
+	if err != nil {
+		return nil, err
+	}
+
+	// Get access to the Models service
+	models := apiClient.Models
+
+	// Create generate content config
+	genConfig := &genai.GenerateContentConfig{}
+
+	// Apply generation config if provided
+	if config != nil {
+		genConfig.MaxOutputTokens = config.MaxOutputTokens
+		genConfig.Temperature = config.Temperature
+		genConfig.TopP = config.TopP
+		genConfig.TopK = config.TopK
+	}
+
+	// Ensure the last message is from the user
+	contents = m.maybeAppendUserContent(contents)
+
+	// Generate content
+	return models.GenerateContent(ctx, m.model, contents, genConfig)
 }
 
 // StreamGenerate streams generated content from the model.
-func (m *GoogleLLM) StreamGenerate(ctx context.Context, request GenerateRequest) (GenerateStreamResponse, error) {
+func (m *GeminiLLM) StreamGenerate(ctx context.Context, request GenerateRequest) (GenerateStreamResponse, error) {
+	// Ensure we have an API client
+	apiClient, err := m.getAPIClient()
+	if err != nil {
+		return nil, err
+	}
+
+	// Get access to the Models service
+	models := apiClient.Models
+
+	// Create config for generate content
 	config := &genai.GenerateContentConfig{}
 
 	// Apply generation config if provided
@@ -130,70 +204,89 @@ func (m *GoogleLLM) StreamGenerate(ctx context.Context, request GenerateRequest)
 	}
 
 	// Apply safety settings if provided
-	if request.SafetySettings != nil {
+	if request.SafetySettings != nil && len(request.SafetySettings) > 0 {
 		config.SafetySettings = request.SafetySettings
 	}
 
-	// Generate content stream
-	stream := m.client.Models.GenerateContentStream(ctx, m.modelName, request.Content, config)
+	// Ensure the last message is from the user
+	contents := m.maybeAppendUserContent(request.Content)
 
-	return &googleStreamResponse{
-		stream: stream,
-		ctx:    ctx,
+	// Stream generate content
+	iterResponse := models.GenerateContentStream(ctx, m.model, contents, config)
+
+	return &geminiStreamResponse{
+		itr: iterResponse,
 	}, nil
 }
 
 // StreamGenerateContent streams generated content from the model.
-func (m *GoogleLLM) StreamGenerateContent(ctx context.Context, contents []*genai.Content, config *genai.GenerateContentConfig) (GenerateStreamResponse, error) {
-	stream := m.client.Models.GenerateContentStream(ctx, m.modelName, contents, config)
+func (m *GeminiLLM) StreamGenerateContent(ctx context.Context, contents []*genai.Content, config *genai.GenerateContentConfig) (GenerateStreamResponse, error) {
+	// Ensure we have an API client
+	apiClient, err := m.getAPIClient()
+	if err != nil {
+		return nil, err
+	}
 
-	return &googleStreamResponse{
-		stream: stream,
-		ctx:    ctx,
+	// Get access to the Models service
+	models := apiClient.Models
+
+	// Create generate content config
+	genConfig := &genai.GenerateContentConfig{}
+
+	// Apply generation config if provided
+	if config != nil {
+		genConfig.MaxOutputTokens = config.MaxOutputTokens
+		genConfig.Temperature = config.Temperature
+		genConfig.TopP = config.TopP
+		genConfig.TopK = config.TopK
+	}
+
+	// Ensure the last message is from the user
+	contents = m.maybeAppendUserContent(contents)
+
+	// Stream generate content
+	iterResponse := models.GenerateContentStream(ctx, m.model, contents, genConfig)
+
+	return &geminiStreamResponse{
+		itr: iterResponse,
 	}, nil
 }
 
 // WithGenerationConfig returns a new model with the specified generation config.
-func (m *GoogleLLM) WithGenerationConfig(config *genai.GenerationConfig) GenerativeModel {
-	clone := *m
-	clone.BaseLLM = m.BaseLLM.WithGenerationConfig(config)
-	return &clone
+func (m *GeminiLLM) WithGenerationConfig(config *genai.GenerationConfig) GenerativeModel {
+	// Create a new instance to avoid modifying the original
+	clone := &GeminiLLM{
+		BaseLLM:         m.BaseLLM.WithGenerationConfig(config),
+		apiClient:       m.apiClient,
+		trackingHeaders: m.trackingHeaders,
+	}
+	return clone
 }
 
 // WithSafetySettings returns a new model with the specified safety settings.
-func (m *GoogleLLM) WithSafetySettings(settings []*genai.SafetySetting) GenerativeModel {
-	clone := *m
-	clone.BaseLLM = m.BaseLLM.WithSafetySettings(settings)
-	return &clone
+func (m *GeminiLLM) WithSafetySettings(settings []*genai.SafetySetting) GenerativeModel {
+	// Create a new instance to avoid modifying the original
+	clone := &GeminiLLM{
+		BaseLLM:         m.BaseLLM.WithSafetySettings(settings),
+		apiClient:       m.apiClient,
+		trackingHeaders: m.trackingHeaders,
+	}
+	return clone
 }
 
-// googleStreamResponse implements GenerateStreamResponse for Google LLM models.
-type googleStreamResponse struct {
-	stream  iter.Seq2[*genai.GenerateContentResponse, error]
-	ctx     context.Context
-	nextVal *genai.GenerateContentResponse
-	nextErr error
-	done    bool
+// geminiStreamResponse implements GenerateStreamResponse for Gemini models.
+type geminiStreamResponse struct {
+	itr iter.Seq2[*genai.GenerateContentResponse, error]
 }
 
 // Next returns the next response in the stream.
-func (s *googleStreamResponse) Next() (*genai.GenerateContentResponse, error) {
-	if s.done {
-		return nil, s.nextErr
+func (s *geminiStreamResponse) Next() (*genai.GenerateContentResponse, error) {
+	// With [iter.Seq2], we need to use a for loop with a single iteration
+	// to get the next value and error
+	for resp, err := range s.itr {
+		return resp, err
 	}
 
-	for val, err := range s.stream {
-		if err != nil {
-			s.done = true
-			s.nextErr = err
-			return nil, err
-		}
-		return val, nil
-	}
-
-	s.done = true
-	return nil, nil // End of stream
+	// If the iterator is empty, return nil
+	return nil, nil
 }
-
-// Ensure GoogleLLM implements GenerativeModel interface.
-var _ GenerativeModel = (*GoogleLLM)(nil)

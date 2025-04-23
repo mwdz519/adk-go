@@ -8,263 +8,172 @@ import (
 	"fmt"
 	"iter"
 	"sync"
-	"time"
 
 	"google.golang.org/genai"
 )
 
-// GeminiLLMConnection implements BaseLLMConnection interface for Gemini models.
+// GeminiLLMConnection implements BaseLLMConnection for Google Gemini models.
 type GeminiLLMConnection struct {
-	model       *GoogleLLM
-	responsesCh chan *LLMResponse
-	client      *genai.Client
-	stopped     bool
-	mutex       sync.Mutex
+	model      string
+	client     *genai.Client
+	history    []*genai.Content
+	responseCh chan *LLMResponse
+	mu         sync.Mutex
+	closed     bool
 }
 
 var _ BaseLLMConnection = (*GeminiLLMConnection)(nil)
 
-// NewGeminiLLMConnection creates a new GeminiLLMConnection.
-func NewGeminiLLMConnection(model *GoogleLLM) (*GeminiLLMConnection, error) {
-	if model == nil {
-		return nil, fmt.Errorf("model cannot be nil")
+// newGeminiLLMConnection creates a new GeminiLLMConnection.
+func newGeminiLLMConnection(model string, client *genai.Client) *GeminiLLMConnection {
+	return &GeminiLLMConnection{
+		model:      model,
+		client:     client,
+		history:    []*genai.Content{},
+		responseCh: make(chan *LLMResponse, 10), // Buffer for responses
 	}
-
-	conn := &GeminiLLMConnection{
-		model:       model,
-		responsesCh: make(chan *LLMResponse, 100), // Buffer size to prevent blocking
-		client:      model.client,
-		stopped:     false,
-	}
-
-	return conn, nil
-}
-
-// Helper function to get generation config from the model
-func getGenerationConfig(model *GoogleLLM) *genai.GenerateContentConfig {
-	config := &genai.GenerateContentConfig{}
-
-	if model.generationConfig != nil {
-		config = &genai.GenerateContentConfig{
-			Temperature:     model.generationConfig.Temperature,
-			MaxOutputTokens: model.generationConfig.MaxOutputTokens,
-			TopK:            model.generationConfig.TopK,
-			TopP:            model.generationConfig.TopP,
-		}
-	}
-
-	if len(model.safetySettings) > 0 {
-		config.SafetySettings = model.safetySettings
-	}
-
-	return config
 }
 
 // SendHistory sends the conversation history to the model.
-// The model will respond if the last content is from user, otherwise it will
-// wait for new user input before responding.
 func (c *GeminiLLMConnection) SendHistory(ctx context.Context, history []*genai.Content) error {
-	c.mutex.Lock()
-	defer c.mutex.Unlock()
+	c.mu.Lock()
+	defer c.mu.Unlock()
 
-	if c.stopped {
+	if c.closed {
 		return fmt.Errorf("connection is closed")
 	}
 
-	// Determine if the last message is from the user to decide if we should generate a response
-	shouldRespond := false
-	if len(history) > 0 {
-		lastMsg := history[len(history)-1]
-		if lastMsg.Role == "user" {
-			shouldRespond = true
-		}
-	}
+	// Store the history
+	c.history = make([]*genai.Content, len(history))
+	copy(c.history, history)
 
-	// If the last message is from the user, generate a response
-	if shouldRespond {
-		go func() {
-			// Start a streaming session for responses
-			config := getGenerationConfig(c.model)
-			stream := c.client.Models.GenerateContentStream(ctx, c.model.modelName, history, config)
-
-			// Process the stream responses
-			c.processStream(ctx, stream)
-		}()
+	// Check if the last message is from the user
+	if len(history) > 0 && history[len(history)-1].Role == "user" {
+		// Start generating in a goroutine
+		go c.startGenerating(ctx)
 	}
 
 	return nil
 }
 
 // SendContent sends a user content to the model.
-// The model will respond immediately upon receiving the content.
 func (c *GeminiLLMConnection) SendContent(ctx context.Context, content *genai.Content) error {
-	c.mutex.Lock()
-	defer c.mutex.Unlock()
+	c.mu.Lock()
+	defer c.mu.Unlock()
 
-	if c.stopped {
+	if c.closed {
 		return fmt.Errorf("connection is closed")
 	}
 
-	// Start a streaming session for responses
-	go func() {
-		// Send a single content message to the model
-		config := getGenerationConfig(c.model)
-		stream := c.client.Models.GenerateContentStream(ctx, c.model.modelName, []*genai.Content{content}, config)
+	// Add the content to history
+	c.history = append(c.history, content)
 
-		// Process the stream responses
-		c.processStream(ctx, stream)
-	}()
+	// If it's a user message, start generating
+	if content.Role == "user" {
+		go c.startGenerating(ctx)
+	}
 
 	return nil
 }
 
 // SendRealtime sends a chunk of audio or a frame of video to the model in realtime.
-// The model may not respond immediately upon receiving the blob.
+// Note: Gemini API may not directly support realtime streaming for all content types.
+// This method provides a placeholder implementation.
 func (c *GeminiLLMConnection) SendRealtime(ctx context.Context, blob []byte, mimeType string) error {
-	c.mutex.Lock()
-	defer c.mutex.Unlock()
-
-	if c.stopped {
-		return fmt.Errorf("connection is closed")
-	}
-
-	// Create a part with media blob data
-	part := &genai.Part{
-		InlineData: &genai.Blob{
-			MIMEType: mimeType,
-			Data:     blob,
-		},
-	}
-
-	// Create content with the blob
-	content := &genai.Content{
-		Role:  "user",
-		Parts: []*genai.Part{part},
-	}
-
-	// Start a streaming session for responses
-	go func() {
-		config := getGenerationConfig(c.model)
-		stream := c.client.Models.GenerateContentStream(ctx, c.model.modelName, []*genai.Content{content}, config)
-		c.processStream(ctx, stream)
-	}()
-
-	return nil
+	// Not all Gemini models support direct realtime streaming
+	// This is a simplified implementation
+	return fmt.Errorf("realtime streaming not implemented for Gemini models")
 }
 
 // Receive returns a channel that yields model responses.
-// It should be called after SendHistory, SendContent, or SendRealtime.
 func (c *GeminiLLMConnection) Receive(ctx context.Context) (<-chan *LLMResponse, error) {
-	c.mutex.Lock()
-	defer c.mutex.Unlock()
+	c.mu.Lock()
+	defer c.mu.Unlock()
 
-	if c.stopped {
+	if c.closed {
 		return nil, fmt.Errorf("connection is closed")
 	}
 
-	// Return the channel that will receive responses
-	return c.responsesCh, nil
+	return c.responseCh, nil
 }
 
 // Close terminates the connection to the model.
-// The connection object should not be used after this call.
 func (c *GeminiLLMConnection) Close() error {
-	c.mutex.Lock()
-	defer c.mutex.Unlock()
+	c.mu.Lock()
+	defer c.mu.Unlock()
 
-	if c.stopped {
+	if c.closed {
 		return nil // Already closed
 	}
 
-	c.stopped = true
-
-	// Close the response channel after ensuring all in-flight writes are complete
-	// Use a deferred close to allow goroutines to finish writing
-	go func() {
-		// Give pending goroutines time to terminate
-		time.Sleep(100 * time.Millisecond)
-		close(c.responsesCh)
-	}()
-
+	c.closed = true
+	close(c.responseCh)
 	return nil
 }
 
-// processStream handles the processing of response streams and sends results to the responsesCh.
-func (c *GeminiLLMConnection) processStream(ctx context.Context, stream iter.Seq2[*genai.GenerateContentResponse, error]) {
-	var fullResponseText string
-	isFirstChunk := true
+// startGenerating starts generating content based on the history.
+func (c *GeminiLLMConnection) startGenerating(ctx context.Context) {
+	// Create a copy of the history to avoid data races
+	history := make([]*genai.Content, len(c.history))
+	copy(history, c.history)
 
-	// For each response in the stream
-	for response, err := range stream {
-		// Check if we've stopped
-		c.mutex.Lock()
-		if c.stopped {
-			c.mutex.Unlock()
-			return
-		}
-		c.mutex.Unlock()
+	// Get access to the Models service
+	models := c.client.Models
 
-		// Check for context cancellation
-		select {
-		case <-ctx.Done():
-			// Send an interruption response
-			c.responsesCh <- &LLMResponse{
-				Interrupted:  true,
-				ErrorCode:    "CANCELLED",
-				ErrorMessage: "Request was cancelled",
-			}
-			return
-		default:
-			// Continue processing
-		}
+	// Stream generate content from the model
+	stream := models.GenerateContentStream(ctx, c.model, history, nil)
 
-		// Check for errors
+	// Process the stream
+	c.processStream(ctx, stream)
+}
+
+// processStream processes the content stream and sends responses through the channel.
+func (c *GeminiLLMConnection) processStream(_ context.Context, stream iter.Seq2[*genai.GenerateContentResponse, error]) {
+	// Type assert the stream to get access to HasNext and Next methods
+	// We use a type assertion pattern that works with the genai iterator without directly importing it
+
+	for resp, err := range stream {
 		if err != nil {
-			c.responsesCh <- &LLMResponse{
-				ErrorCode:    "STREAM_ERROR",
-				ErrorMessage: err.Error(),
-			}
+			c.sendErrorResponse(err)
 			return
 		}
 
-		// Create LLMResponse from the stream response
-		llmResponse := Create(response)
+		// Convert genai response to LLMResponse
+		llmResp := Create(resp)
 
-		// For text responses, track partial/complete status
-		if len(response.Candidates) > 0 && response.Candidates[0].Content != nil {
-			// Handle partial flag for streaming text responses
-			currentText := llmResponse.GetText()
+		// Mark as partial (not the end of the stream)
+		llmResp.WithPartial(true)
 
-			if isFirstChunk {
-				fullResponseText = currentText
-				isFirstChunk = false
-				// First chunk is partial unless it's empty
-				llmResponse.Partial = (currentText != "")
-			} else {
-				// Subsequent chunks are partial
-				fullResponseText += currentText
-				llmResponse.Partial = true
-			}
-
-			// Check if this is the last chunk (finish reason is present)
-			if response.Candidates[0].FinishReason != genai.FinishReasonUnspecified {
-				llmResponse.Partial = false
-				llmResponse.TurnComplete = true
-			}
+		// Send to channel if not closed
+		c.mu.Lock()
+		if !c.closed {
+			c.responseCh <- llmResp
 		}
-
-		// Send the response
-		select {
-		case c.responsesCh <- llmResponse:
-			// Response sent successfully
-		case <-ctx.Done():
-			// Context cancelled while sending
-			return
-		}
+		c.mu.Unlock()
 	}
 
-	// Send a final turn complete message
-	c.responsesCh <- &LLMResponse{
-		TurnComplete: true,
+	// Send a final response with TurnComplete set to true
+	finalResp := NewLLMResponse()
+	finalResp.WithTurnComplete(true)
+	finalResp.WithPartial(false)
+
+	c.mu.Lock()
+	if !c.closed {
+		c.responseCh <- finalResp
+	}
+	c.mu.Unlock()
+}
+
+// sendErrorResponse sends an error response through the channel.
+func (c *GeminiLLMConnection) sendErrorResponse(err error) {
+	resp := NewLLMResponse()
+	resp.ErrorCode = "GENERATION_ERROR"
+	resp.ErrorMessage = err.Error()
+
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	if !c.closed {
+		c.responseCh <- resp
 	}
 }

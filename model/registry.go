@@ -30,7 +30,7 @@ func init() {
 			`projects\/.*\/locations\/.*\/publishers\/google\/models\/gemini-.*`,
 		},
 		func(ctx context.Context, apiKey string, modelName string) (Model, error) {
-			return NewGoogleLLM(ctx, apiKey, modelName)
+			return NewGeminiLLM(ctx, apiKey, modelName)
 		},
 	)
 }

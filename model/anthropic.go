@@ -32,7 +32,6 @@ type ClaudeLLM struct {
 	anthropicError error
 }
 
-// Implements check that ClaudeLLM implements GenerativeModel interface.
 var _ GenerativeModel = (*ClaudeLLM)(nil)
 
 // NewClaudeLLM creates a new Claude LLM instance.
