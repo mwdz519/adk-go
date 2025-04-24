@@ -182,7 +182,7 @@ func (m *GeminiLLM) GenerateContent(ctx context.Context, contents []*genai.Conte
 }
 
 // StreamGenerate streams generated content from the model.
-func (m *GeminiLLM) StreamGenerate(ctx context.Context, request GenerateRequest) (GenerateStreamResponse, error) {
+func (m *GeminiLLM) StreamGenerate(ctx context.Context, request GenerateRequest) (StreamGenerateResponse, error) {
 	// Ensure we have an API client
 	apiClient, err := m.getAPIClient()
 	if err != nil {
@@ -212,15 +212,15 @@ func (m *GeminiLLM) StreamGenerate(ctx context.Context, request GenerateRequest)
 	contents := m.maybeAppendUserContent(request.Content)
 
 	// Stream generate content
-	iterResponse := models.GenerateContentStream(ctx, m.model, contents, config)
+	stream := models.GenerateContentStream(ctx, m.model, contents, config)
 
 	return &geminiStreamResponse{
-		itr: iterResponse,
+		stream: stream,
 	}, nil
 }
 
 // StreamGenerateContent streams generated content from the model.
-func (m *GeminiLLM) StreamGenerateContent(ctx context.Context, contents []*genai.Content, config *genai.GenerateContentConfig) (GenerateStreamResponse, error) {
+func (m *GeminiLLM) StreamGenerateContent(ctx context.Context, contents []*genai.Content, config *genai.GenerateContentConfig) (StreamGenerateResponse, error) {
 	// Ensure we have an API client
 	apiClient, err := m.getAPIClient()
 	if err != nil {
@@ -245,10 +245,10 @@ func (m *GeminiLLM) StreamGenerateContent(ctx context.Context, contents []*genai
 	contents = m.maybeAppendUserContent(contents)
 
 	// Stream generate content
-	iterResponse := models.GenerateContentStream(ctx, m.model, contents, genConfig)
+	stream := models.GenerateContentStream(ctx, m.model, contents, genConfig)
 
 	return &geminiStreamResponse{
-		itr: iterResponse,
+		stream: stream,
 	}, nil
 }
 
@@ -274,16 +274,19 @@ func (m *GeminiLLM) WithSafetySettings(settings []*genai.SafetySetting) Generati
 	return clone
 }
 
-// geminiStreamResponse implements GenerateStreamResponse for Gemini models.
+// geminiStreamResponse implements [StreamGenerateResponse] for [GeminiLLM].
 type geminiStreamResponse struct {
-	itr iter.Seq2[*genai.GenerateContentResponse, error]
+	stream    iter.Seq2[*genai.GenerateContentResponse, error]
+	streamIdx int
 }
+
+var _ StreamGenerateResponse = (*geminiStreamResponse)(nil)
 
 // Next returns the next response in the stream.
 func (s *geminiStreamResponse) Next() (*genai.GenerateContentResponse, error) {
 	// With [iter.Seq2], we need to use a for loop with a single iteration
 	// to get the next value and error
-	for resp, err := range s.itr {
+	for resp, err := range s.stream {
 		return resp, err
 	}
 

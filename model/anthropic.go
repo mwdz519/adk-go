@@ -269,7 +269,7 @@ func (m *ClaudeLLM) GenerateContent(ctx context.Context, contents []*genai.Conte
 }
 
 // StreamGenerate streams generated content from the model.
-func (m *ClaudeLLM) StreamGenerate(ctx context.Context, request GenerateRequest) (GenerateStreamResponse, error) {
+func (m *ClaudeLLM) StreamGenerate(ctx context.Context, request GenerateRequest) (StreamGenerateResponse, error) {
 	anthropicClient, err := m.anthropicClient()
 	if err != nil {
 		return nil, err
@@ -336,7 +336,7 @@ func (m *ClaudeLLM) StreamGenerate(ctx context.Context, request GenerateRequest)
 }
 
 // StreamGenerateContent streams generated content from the model.
-func (m *ClaudeLLM) StreamGenerateContent(ctx context.Context, contents []*genai.Content, config *genai.GenerateContentConfig) (GenerateStreamResponse, error) {
+func (m *ClaudeLLM) StreamGenerateContent(ctx context.Context, contents []*genai.Content, config *genai.GenerateContentConfig) (StreamGenerateResponse, error) {
 	request := GenerateRequest{
 		Content: contents,
 	}

@@ -47,10 +47,10 @@ type GenerativeModel interface {
 	Model
 
 	// StreamGenerate streams generated content from the model.
-	StreamGenerate(ctx context.Context, request GenerateRequest) (GenerateStreamResponse, error)
+	StreamGenerate(ctx context.Context, request GenerateRequest) (StreamGenerateResponse, error)
 
 	// StreamGenerateContent streams generated content from the model.
-	StreamGenerateContent(ctx context.Context, contents []*genai.Content, config *genai.GenerateContentConfig) (GenerateStreamResponse, error)
+	StreamGenerateContent(ctx context.Context, contents []*genai.Content, config *genai.GenerateContentConfig) (StreamGenerateResponse, error)
 
 	// WithGenerationConfig returns a new model with the specified generation config.
 	WithGenerationConfig(config *genai.GenerationConfig) GenerativeModel
@@ -59,8 +59,8 @@ type GenerativeModel interface {
 	WithSafetySettings(settings []*genai.SafetySetting) GenerativeModel
 }
 
-// GenerateStreamResponse represents a stream of generated content.
-type GenerateStreamResponse interface {
+// StreamGenerateResponse represents a stream of generated content.
+type StreamGenerateResponse interface {
 	// Next returns the next response in the stream.
 	Next() (*genai.GenerateContentResponse, error)
 }
@@ -104,11 +104,11 @@ func (m *BaseGenerativeModel) GenerateContent(ctx context.Context, contents []*g
 }
 
 // StreamGenerate streams generated content from the model.
-func (m *BaseGenerativeModel) StreamGenerate(ctx context.Context, request GenerateRequest) (GenerateStreamResponse, error) {
+func (m *BaseGenerativeModel) StreamGenerate(ctx context.Context, request GenerateRequest) (StreamGenerateResponse, error) {
 	return m.BaseLLM.StreamGenerate(ctx, request)
 }
 
 // StreamGenerateContent streams generated content from the model.
-func (m *BaseGenerativeModel) StreamGenerateContent(ctx context.Context, contents []*genai.Content, config *genai.GenerateContentConfig) (GenerateStreamResponse, error) {
+func (m *BaseGenerativeModel) StreamGenerateContent(ctx context.Context, contents []*genai.Content, config *genai.GenerateContentConfig) (StreamGenerateResponse, error) {
 	return m.BaseLLM.StreamGenerateContent(ctx, contents, config)
 }
