@@ -48,7 +48,7 @@ func (c *GeminiLLMConnection) SendHistory(ctx context.Context, history []*genai.
 	copy(c.history, history)
 
 	// Check if the last message is from the user
-	if len(history) > 0 && history[len(history)-1].Role == "user" {
+	if len(history) > 0 && history[len(history)-1].Role == RoleUser {
 		// Start generating in a goroutine
 		go c.startGenerating(ctx)
 	}
