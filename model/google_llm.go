@@ -14,25 +14,32 @@ import (
 	"google.golang.org/genai"
 )
 
+const (
+	// GeminiLLMDefaultModel is the default model name for [GeminiLLM].
+	GeminiLLMDefaultModel = "gemini-1.5-pro"
+)
+
 // GeminiLLM represents a Google Gemini Large Language Model.
 type GeminiLLM struct {
 	*BaseLLM
+
+	genaiClient     *genai.Client
 	apiClient       *genai.Client
-	apiClientOnce   sync.Once
 	apiClientError  error
+	apiClientOnce   sync.Once
 	trackingHeaders map[string]string
 }
 
 var _ GenerativeModel = (*GeminiLLM)(nil)
 
-// NewGeminiLLM creates a new Gemini LLM instance.
+// NewGeminiLLM creates a new [GeminiLLM] instance.
 func NewGeminiLLM(ctx context.Context, apiKey string, modelName string) (*GeminiLLM, error) {
 	// Use default model if none provided
 	if modelName == "" {
-		modelName = "gemini-1.5-pro"
+		modelName = GeminiLLMDefaultModel
 	}
 
-	// Create genai client for BaseLLM
+	// Create GenAI client for BaseLLM
 	genaiClient, err := genai.NewClient(ctx, &genai.ClientConfig{
 		APIKey: apiKey,
 	})
@@ -41,7 +48,8 @@ func NewGeminiLLM(ctx context.Context, apiKey string, modelName string) (*Gemini
 	}
 
 	return &GeminiLLM{
-		BaseLLM:         NewBaseLLM(modelName, genaiClient),
+		BaseLLM:         NewBaseLLM(modelName),
+		genaiClient:     genaiClient,
 		trackingHeaders: make(map[string]string),
 	}, nil
 }
