@@ -10,7 +10,7 @@ import (
 )
 
 // ModelType represents a type of model.
-type ModelType string
+type ModelType = string
 
 const (
 	// ModelTypeGemini represents Gemini models.
@@ -88,11 +88,11 @@ func (f *DefaultModelFactory) CreateGenerativeModel(ctx context.Context, modelNa
 
 // getModelType returns the model type for the specified model name.
 func getModelType(modelName string) ModelType {
-	if strings.HasPrefix(modelName, "gemini") {
+	if strings.HasPrefix(modelName, ModelTypeGemini) {
 		return ModelTypeGemini
 	}
 
-	if strings.HasPrefix(modelName, "claude") {
+	if strings.HasPrefix(modelName, ModelTypeClaude) {
 		return ModelTypeClaude
 	}
 
