@@ -86,6 +86,8 @@ func (m *ClaudeLLM) SupportedModels() []string {
 }
 
 // Connect creates a live connection to the Claude LLM.
+//
+// TODO(zchee): implements.
 func (m *ClaudeLLM) Connect() (BaseLLMConnection, error) {
 	// Ensure we can get an Anthropic client
 	_ = m.anthropicClient
