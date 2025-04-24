@@ -9,7 +9,6 @@ import (
 	"iter"
 	"os"
 	"strings"
-	"sync"
 
 	"google.golang.org/genai"
 )
@@ -17,6 +16,9 @@ import (
 const (
 	// GeminiLLMDefaultModel is the default model name for [GeminiLLM].
 	GeminiLLMDefaultModel = "gemini-1.5-pro"
+
+	// EnvGoogleAPIKey is the environment variable name for the Google AI API key.
+	EnvGoogleAPIKey = "GOOGLE_API_KEY"
 )
 
 // GeminiLLM represents a Google Gemini Large Language Model.
@@ -24,9 +26,6 @@ type GeminiLLM struct {
 	*BaseLLM
 
 	genaiClient     *genai.Client
-	apiClient       *genai.Client
-	apiClientError  error
-	apiClientOnce   sync.Once
 	trackingHeaders map[string]string
 }
 
@@ -37,6 +36,15 @@ func NewGeminiLLM(ctx context.Context, apiKey string, modelName string) (*Gemini
 	// Use default model if none provided
 	if modelName == "" {
 		modelName = GeminiLLMDefaultModel
+	}
+
+	// Check API key and use [EnvGoogleAPIKey] environment variable if not provided
+	if apiKey == "" {
+		envApiKey := os.Getenv(EnvGoogleAPIKey)
+		if envApiKey == "" {
+			return nil, fmt.Errorf("either apiKey arg or %q environment variable must bu set", EnvGoogleAPIKey)
+		}
+		apiKey = envApiKey
 	}
 
 	// Create GenAI client for BaseLLM
@@ -66,37 +74,8 @@ func (m *GeminiLLM) SupportedModels() []string {
 // Connect creates a live connection to the Gemini LLM.
 func (m *GeminiLLM) Connect() (BaseLLMConnection, error) {
 	// Ensure we have an API client
-	apiClient, err := m.getAPIClient()
-	if err != nil {
-		return nil, err
-	}
-
 	// Create and return a new connection
-	return newGeminiLLMConnection(m.model, apiClient), nil
-}
-
-// getAPIClient returns a cached API client.
-func (m *GeminiLLM) getAPIClient() (*genai.Client, error) {
-	m.apiClientOnce.Do(func() {
-		apiKey := os.Getenv("GOOGLE_API_KEY")
-		if apiKey == "" {
-			m.apiClientError = fmt.Errorf("GOOGLE_API_KEY environment variable not set")
-			return
-		}
-
-		ctx := context.Background()
-		client, err := genai.NewClient(ctx, &genai.ClientConfig{
-			APIKey: apiKey,
-		})
-		if err != nil {
-			m.apiClientError = fmt.Errorf("failed to create genai client: %w", err)
-			return
-		}
-
-		m.apiClient = client
-	})
-
-	return m.apiClient, m.apiClientError
+	return newGeminiLLMConnection(m.model, m.genaiClient), nil
 }
 
 // maybeAppendUserContent checks if the last message is from the user and if not, appends an empty user message.
@@ -121,14 +100,8 @@ func (m *GeminiLLM) maybeAppendUserContent(contents []*genai.Content) []*genai.C
 
 // Generate generates content from the model.
 func (m *GeminiLLM) Generate(ctx context.Context, request GenerateRequest) (*GenerateResponse, error) {
-	// Ensure we have an API client
-	apiClient, err := m.getAPIClient()
-	if err != nil {
-		return nil, err
-	}
-
 	// Get access to the Models service
-	models := apiClient.Models
+	models := m.genaiClient.Models
 
 	// Create config for generate content
 	config := &genai.GenerateContentConfig{}
@@ -162,14 +135,8 @@ func (m *GeminiLLM) Generate(ctx context.Context, request GenerateRequest) (*Gen
 
 // GenerateContent generates content from the model.
 func (m *GeminiLLM) GenerateContent(ctx context.Context, contents []*genai.Content, config *genai.GenerateContentConfig) (*genai.GenerateContentResponse, error) {
-	// Ensure we have an API client
-	apiClient, err := m.getAPIClient()
-	if err != nil {
-		return nil, err
-	}
-
 	// Get access to the Models service
-	models := apiClient.Models
+	models := m.genaiClient.Models
 
 	// Create generate content config
 	genConfig := &genai.GenerateContentConfig{}
@@ -191,14 +158,8 @@ func (m *GeminiLLM) GenerateContent(ctx context.Context, contents []*genai.Conte
 
 // StreamGenerate streams generated content from the model.
 func (m *GeminiLLM) StreamGenerate(ctx context.Context, request GenerateRequest) (StreamGenerateResponse, error) {
-	// Ensure we have an API client
-	apiClient, err := m.getAPIClient()
-	if err != nil {
-		return nil, err
-	}
-
 	// Get access to the Models service
-	models := apiClient.Models
+	models := m.genaiClient.Models
 
 	// Create config for generate content
 	config := &genai.GenerateContentConfig{}
@@ -229,14 +190,8 @@ func (m *GeminiLLM) StreamGenerate(ctx context.Context, request GenerateRequest)
 
 // StreamGenerateContent streams generated content from the model.
 func (m *GeminiLLM) StreamGenerateContent(ctx context.Context, contents []*genai.Content, config *genai.GenerateContentConfig) (StreamGenerateResponse, error) {
-	// Ensure we have an API client
-	apiClient, err := m.getAPIClient()
-	if err != nil {
-		return nil, err
-	}
-
 	// Get access to the Models service
-	models := apiClient.Models
+	models := m.genaiClient.Models
 
 	// Create generate content config
 	genConfig := &genai.GenerateContentConfig{}
@@ -265,7 +220,7 @@ func (m *GeminiLLM) WithGenerationConfig(config *genai.GenerationConfig) Generat
 	// Create a new instance to avoid modifying the original
 	clone := &GeminiLLM{
 		BaseLLM:         m.BaseLLM.WithGenerationConfig(config),
-		apiClient:       m.apiClient,
+		genaiClient:     m.genaiClient,
 		trackingHeaders: m.trackingHeaders,
 	}
 	return clone
@@ -276,7 +231,7 @@ func (m *GeminiLLM) WithSafetySettings(settings []*genai.SafetySetting) Generati
 	// Create a new instance to avoid modifying the original
 	clone := &GeminiLLM{
 		BaseLLM:         m.BaseLLM.WithSafetySettings(settings),
-		apiClient:       m.apiClient,
+		genaiClient:     m.genaiClient,
 		trackingHeaders: m.trackingHeaders,
 	}
 	return clone
