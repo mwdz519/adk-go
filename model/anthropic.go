@@ -5,9 +5,11 @@ package model
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log"
 	"os"
+	"slices"
 
 	anthropic "github.com/anthropics/anthropic-sdk-go"
 	"github.com/anthropics/anthropic-sdk-go/option"
@@ -53,11 +55,11 @@ func NewClaudeLLM(ctx context.Context, apiKey string, modelName string) (*Claude
 		apiKey = envApiKey
 	}
 
-	client := anthropic.NewClient(option.WithAPIKey(apiKey))
+	anthropicClient := anthropic.NewClient(option.WithAPIKey(apiKey))
 
 	return &ClaudeLLM{
 		BaseLLM:         NewBaseLLM(modelName),
-		anthropicClient: client,
+		anthropicClient: anthropicClient,
 	}, nil
 }
 
@@ -99,7 +101,7 @@ func (m *ClaudeLLM) Connect() (BaseLLMConnection, error) {
 
 // extractSystemPrompt extracts system prompt text from the first message if it's a system message
 func extractSystemPrompt(messages []*genai.Content) (string, bool) {
-	if len(messages) == 0 || messages[0].Role != "system" {
+	if len(messages) == 0 || messages[0].Role != RoleSystem {
 		return "", false
 	}
 
@@ -141,7 +143,10 @@ func extractFunctionDeclarations(contents []*genai.Content) []anthropic.ToolUnio
 // Generate generates content from the model.
 func (m *ClaudeLLM) Generate(ctx context.Context, request GenerateRequest) (*GenerateResponse, error) {
 	// Convert messages to Anthropic format
-	messageParams := contentToMessageParam(request.Content)
+	messageParams := make([]anthropic.MessageParam, len(request.Content))
+	for i, content := range request.Content {
+		messageParams[i] = contentToClaudeMessageParam(content)
+	}
 
 	// Prepare parameters
 	params := anthropic.MessageNewParams{
@@ -173,7 +178,7 @@ func (m *ClaudeLLM) Generate(ctx context.Context, request GenerateRequest) (*Gen
 		var systemTextBlocks []anthropic.TextBlockParam
 		systemTextBlocks = append(systemTextBlocks, anthropic.TextBlockParam{
 			Text: systemText,
-			Type: "text",
+			Type: constant.ValueOf[constant.Text]().Default(),
 		})
 		params.System = systemTextBlocks
 
@@ -228,7 +233,7 @@ func anthropicMessageToGenAIContent(message *anthropic.Message) *genai.Content {
 
 	// Create a new content with "model" (in anthropic, called "assistant") role
 	return &genai.Content{
-		Role:  genai.RoleModel,
+		Role:  RoleModel,
 		Parts: parts,
 	}
 }
@@ -262,18 +267,22 @@ func (m *ClaudeLLM) GenerateContent(ctx context.Context, contents []*genai.Conte
 	if err != nil {
 		return nil, err
 	}
+
 	return resp.Content, nil
 }
 
 // StreamGenerate streams generated content from the model.
 func (m *ClaudeLLM) StreamGenerate(ctx context.Context, request GenerateRequest) (StreamGenerateResponse, error) {
 	// Convert to Anthropic format
-	messageParams := contentToMessageParam(request.Content)
+	msgParams := make([]anthropic.MessageParam, len(request.Content))
+	for i, content := range request.Content {
+		msgParams[i] = contentToClaudeMessageParam(content)
+	}
 
 	// Prepare parameters
 	params := anthropic.MessageNewParams{
 		Model:     anthropic.Model(m.model),
-		Messages:  messageParams,
+		Messages:  msgParams,
 		MaxTokens: 4096,
 	}
 
@@ -306,9 +315,9 @@ func (m *ClaudeLLM) StreamGenerate(ctx context.Context, request GenerateRequest)
 
 		// Remove system message from the message list since it's set separately
 		// Only if there are more than one message, otherwise we keep the empty list
-		if len(messageParams) > 1 {
-			messageParams = messageParams[1:]
-			params.Messages = messageParams
+		if len(msgParams) > 1 {
+			msgParams = msgParams[1:]
+			params.Messages = msgParams
 		}
 	}
 
@@ -358,21 +367,19 @@ func (m *ClaudeLLM) StreamGenerateContent(ctx context.Context, contents []*genai
 // WithGenerationConfig returns a new model with the specified generation config.
 func (m *ClaudeLLM) WithGenerationConfig(config *genai.GenerationConfig) GenerativeModel {
 	// Create a new instance to avoid copying sync.Once
-	clone := &ClaudeLLM{
+	return &ClaudeLLM{
 		BaseLLM:         m.BaseLLM.WithGenerationConfig(config),
 		anthropicClient: m.anthropicClient,
 	}
-	return clone
 }
 
 // WithSafetySettings returns a new model with the specified safety settings.
 func (m *ClaudeLLM) WithSafetySettings(settings []*genai.SafetySetting) GenerativeModel {
 	// Create a new instance to avoid copying sync.Once
-	clone := &ClaudeLLM{
+	return &ClaudeLLM{
 		BaseLLM:         m.BaseLLM.WithSafetySettings(settings),
 		anthropicClient: m.anthropicClient,
 	}
-	return clone
 }
 
 // ClaudeRequest contains the request parameters for Claude models.
@@ -434,7 +441,7 @@ func (s *claudeStreamResponse) Next() (*genai.GenerateContentResponse, error) {
 			Candidates: []*genai.Candidate{
 				{
 					Content: &genai.Content{
-						Role:  "assistant",
+						Role:  RoleAssistant,
 						Parts: parts,
 					},
 				},
@@ -449,38 +456,65 @@ func (s *claudeStreamResponse) Next() (*genai.GenerateContentResponse, error) {
 
 // Helper functions for conversion between GenAI and Anthropic formats
 
-// contentToMessageParam converts GenAI content to Anthropic message parameters.
-func contentToMessageParam(contents []*genai.Content) []anthropic.MessageParam {
-	var messageParams []anthropic.MessageParam
+var genAIRoles = []Role{
+	RoleModel,
+	RoleAssistant,
+}
 
-	for _, content := range contents {
-		// Skip system messages (handled separately in Generate/StreamGenerate)
-		if content.Role == "system" {
-			continue
-		}
+func asClaudeRole(role string) anthropic.MessageParamRole {
+	if slices.Contains(genAIRoles, role) {
+		return anthropic.MessageParamRoleAssistant
+	}
+	return anthropic.MessageParamRoleUser
+}
 
-		var contentBlocks []anthropic.ContentBlockParamUnion
-		for _, part := range content.Parts {
-			if part != nil && part.Text != "" {
-				// Create text block
-				contentBlocks = append(contentBlocks, anthropic.NewTextBlock(part.Text))
-			}
-		}
-
-		// Create a message parameter with the role and content blocks
-		var messageParam anthropic.MessageParam
-		switch content.Role {
-		case "user":
-			messageParam = anthropic.NewUserMessage(contentBlocks...)
-		case "assistant":
-			messageParam = anthropic.NewAssistantMessage(contentBlocks...)
-		default:
-			log.Printf("Unsupported role: %s, using 'user'", content.Role)
-			messageParam = anthropic.NewUserMessage(contentBlocks...)
-		}
-
-		messageParams = append(messageParams, messageParam)
+func partToClaudeMessageBlock(part *genai.Part) (anthropic.ContentBlockParamUnion, error) {
+	if part.Text != "" {
+		params := anthropic.NewTextBlock(part.Text)
+		params.OfRequestTextBlock.Type = constant.ValueOf[constant.Text]().Default()
+		return params, nil
 	}
 
-	return messageParams
+	if part.FunctionCall != nil {
+		funcCall := part.FunctionCall
+		// Assert function call name if [genai.Part.FunctionCall] is non-nil
+		if funcCall.Name != "" {
+			return anthropic.ContentBlockParamUnion{}, errors.New("FunctionCall name is empty")
+		}
+
+		params := anthropic.ContentBlockParamOfRequestToolUseBlock(funcCall.ID, funcCall.Args, funcCall.Name)
+		params.OfRequestToolUseBlock.Type = constant.ValueOf[constant.ToolUse]().Default()
+		return anthropic.ContentBlockParamUnion{}, nil
+	}
+
+	if part.FunctionResponse != nil {
+		funcResponse := part.FunctionResponse
+		if result, ok := funcResponse.Response["result"]; ok {
+			params := anthropic.NewToolResultBlock(funcResponse.ID, fmt.Sprintf("%s", result), false)
+			params.OfRequestToolResultBlock.Type = constant.ValueOf[constant.ToolResult]().Default()
+			return params, nil
+		}
+	}
+
+	return anthropic.ContentBlockParamUnion{}, fmt.Errorf("not supported yet %T part type", part)
+}
+
+// contentToClaudeMessageParam converts [*genai.Content] to [anthropic.MessageParam].
+func contentToClaudeMessageParam(content *genai.Content) (msgParam anthropic.MessageParam) {
+	// Skip system messages (handled separately in Generate/StreamGenerate)
+	if content.Role == RoleSystem {
+		return
+	}
+	msgParam.Role = asClaudeRole(content.Role)
+
+	msgParam.Content = make([]anthropic.ContentBlockParamUnion, 0, len(content.Parts))
+	for _, part := range content.Parts {
+		msgBlock, err := partToClaudeMessageBlock(part)
+		if err != nil {
+			continue
+		}
+		msgParam.Content = append(msgParam.Content, msgBlock)
+	}
+
+	return msgParam
 }
