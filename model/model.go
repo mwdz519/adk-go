@@ -90,9 +90,9 @@ type BaseGenerativeModel struct {
 var _ GenerativeModel = (*BaseGenerativeModel)(nil)
 
 // NewBaseGenerativeModel creates a new base generative model.
-func NewBaseGenerativeModel(name string, client *genai.Client) *BaseGenerativeModel {
+func NewBaseGenerativeModel(name string) *BaseGenerativeModel {
 	return &BaseGenerativeModel{
-		BaseLLM: NewBaseLLM(name, client),
+		BaseLLM: NewBaseLLM(name),
 	}
 }
 
