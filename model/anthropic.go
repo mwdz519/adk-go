@@ -8,28 +8,31 @@ import (
 	"fmt"
 	"log"
 	"os"
-	"sync"
 
 	anthropic "github.com/anthropics/anthropic-sdk-go"
 	"github.com/anthropics/anthropic-sdk-go/option"
 	"github.com/anthropics/anthropic-sdk-go/packages/ssestream"
+	"github.com/anthropics/anthropic-sdk-go/shared/constant"
 	"google.golang.org/genai"
 )
 
-// ClaudeRequest contains the request parameters for Claude models.
-type ClaudeRequest struct {
-	SystemInstruction string
-	Messages          []*genai.Content
-	Tools             []*genai.Tool
-}
+const (
+	// ClaudeLLMDefaultModel is the default model name for [ClaudeLLM].
+	//
+	// This model is only available on Google Cloud Platform (GCP) Vertex AI.
+	// If you want to use the Anthropic official model, pass any model name that is defined in the
+	// anthropic-sdk-go package's constants to [NewClaudeLLM].
+	ClaudeLLMDefaultModel = "claude-3-5-sonnet-v2@20241022"
+
+	// EnvAnthropicAPIKey is the environment variable name for the Anthropic API key.
+	EnvAnthropicAPIKey = "ANTHROPIC_API_KEY"
+)
 
 // ClaudeLLM represents a Claude Large Language Model.
 type ClaudeLLM struct {
 	*BaseLLM
-	client         anthropic.Client
-	clientOnce     sync.Once
-	defaultModel   string
-	anthropicError error
+
+	anthropicClient anthropic.Client
 }
 
 var _ GenerativeModel = (*ClaudeLLM)(nil)
@@ -38,57 +41,54 @@ var _ GenerativeModel = (*ClaudeLLM)(nil)
 func NewClaudeLLM(ctx context.Context, apiKey string, modelName string) (*ClaudeLLM, error) {
 	// Use default model if none provided
 	if modelName == "" {
-		modelName = string(anthropic.ModelClaude3_5SonnetLatest)
+		modelName = ClaudeLLMDefaultModel
 	}
 
-	// Create genai client for BaseLLM
-	genaiClient, err := genai.NewClient(ctx, &genai.ClientConfig{
-		APIKey: apiKey,
-	})
-	if err != nil {
-		return nil, fmt.Errorf("failed to create genai client: %w", err)
+	// Check API key and use [EnvAnthropicAPIKey] environment variable if not provided
+	if apiKey == "" {
+		envApiKey := os.Getenv(EnvAnthropicAPIKey)
+		if envApiKey == "" {
+			return nil, fmt.Errorf("either apiKey arg or %q environment variable must bu set", EnvAnthropicAPIKey)
+		}
+		apiKey = envApiKey
 	}
+
+	client := anthropic.NewClient(option.WithAPIKey(apiKey))
 
 	return &ClaudeLLM{
-		BaseLLM:      NewBaseLLM(modelName, genaiClient),
-		defaultModel: modelName,
+		BaseLLM:         NewBaseLLM(modelName),
+		anthropicClient: client,
 	}, nil
-}
-
-// anthropicClient returns a cached Anthropic client.
-func (m *ClaudeLLM) anthropicClient() (anthropic.Client, error) {
-	m.clientOnce.Do(func() {
-		apiKey := os.Getenv("ANTHROPIC_API_KEY")
-		if apiKey == "" {
-			m.anthropicError = fmt.Errorf("ANTHROPIC_API_KEY environment variable not set")
-			return
-		}
-
-		m.client = anthropic.NewClient(option.WithAPIKey(apiKey))
-	})
-
-	return m.client, m.anthropicError
 }
 
 // SupportedModels returns a list of supported Claude models.
 func (m *ClaudeLLM) SupportedModels() []string {
 	return []string{
-		string(anthropic.ModelClaude3OpusLatest),
-		string(anthropic.ModelClaude3_5SonnetLatest),
-		string(anthropic.ModelClaude3_7SonnetLatest),
-		"claude-3-opus-20240229",
-		"claude-3-sonnet-20240229",
-		"claude-3-haiku-20240307",
+		// GCP Vertex AI
+		"claude-3-7-sonnet@20250219",
+		"claude-3-5-haiku@20241022",
+		"claude-3-5-sonnet-v2@20241022",
+		"claude-3-opus@20240229",
+		"claude-3-sonnet@20240229",
+		"claude-3-haiku@20240307",
+
+		// Anthropic API
+		anthropic.ModelClaude3_7SonnetLatest,
+		anthropic.ModelClaude3_7Sonnet20250219,
+		anthropic.ModelClaude3_5HaikuLatest,
+		anthropic.ModelClaude3_5Haiku20241022,
+		anthropic.ModelClaude3_5SonnetLatest,
+		anthropic.ModelClaude3_5Sonnet20241022,
+		anthropic.ModelClaude_3_5_Sonnet_20240620,
+		anthropic.ModelClaude3OpusLatest,
+		anthropic.ModelClaude_3_Opus_20240229,
 	}
 }
 
 // Connect creates a live connection to the Claude LLM.
 func (m *ClaudeLLM) Connect() (BaseLLMConnection, error) {
 	// Ensure we can get an Anthropic client
-	_, err := m.anthropicClient()
-	if err != nil {
-		return nil, err
-	}
+	_ = m.anthropicClient
 
 	// For now, this is a placeholder as we haven't implemented ClaudeLLMConnection yet
 	// In a real implementation, we would return a proper ClaudeLLMConnection
@@ -138,11 +138,6 @@ func extractFunctionDeclarations(contents []*genai.Content) []anthropic.ToolUnio
 
 // Generate generates content from the model.
 func (m *ClaudeLLM) Generate(ctx context.Context, request GenerateRequest) (*GenerateResponse, error) {
-	anthropicClient, err := m.anthropicClient()
-	if err != nil {
-		return nil, err
-	}
-
 	// Convert messages to Anthropic format
 	messageParams := contentToMessageParam(request.Content)
 
@@ -195,7 +190,7 @@ func (m *ClaudeLLM) Generate(ctx context.Context, request GenerateRequest) (*Gen
 	}
 
 	// Make API call
-	message, err := anthropicClient.Messages.New(ctx, params)
+	message, err := m.anthropicClient.Messages.New(ctx, params)
 	if err != nil {
 		return nil, fmt.Errorf("claude API error: %w", err)
 	}
@@ -229,9 +224,9 @@ func anthropicMessageToGenAIContent(message *anthropic.Message) *genai.Content {
 		}
 	}
 
-	// Create a new content with assistant role
+	// Create a new content with "model" (in anthropic, called "assistant") role
 	return &genai.Content{
-		Role:  "assistant",
+		Role:  genai.RoleModel,
 		Parts: parts,
 	}
 }
@@ -270,11 +265,6 @@ func (m *ClaudeLLM) GenerateContent(ctx context.Context, contents []*genai.Conte
 
 // StreamGenerate streams generated content from the model.
 func (m *ClaudeLLM) StreamGenerate(ctx context.Context, request GenerateRequest) (StreamGenerateResponse, error) {
-	anthropicClient, err := m.anthropicClient()
-	if err != nil {
-		return nil, err
-	}
-
 	// Convert to Anthropic format
 	messageParams := contentToMessageParam(request.Content)
 
@@ -308,7 +298,7 @@ func (m *ClaudeLLM) StreamGenerate(ctx context.Context, request GenerateRequest)
 		var systemTextBlocks []anthropic.TextBlockParam
 		systemTextBlocks = append(systemTextBlocks, anthropic.TextBlockParam{
 			Text: systemText,
-			Type: "text",
+			Type: constant.Text("text"),
 		})
 		params.System = systemTextBlocks
 
@@ -327,7 +317,7 @@ func (m *ClaudeLLM) StreamGenerate(ctx context.Context, request GenerateRequest)
 	}
 
 	// Make streaming API call - stream parameter is added by the method
-	stream := anthropicClient.Messages.NewStreaming(ctx, params)
+	stream := m.anthropicClient.Messages.NewStreaming(ctx, params)
 
 	return &claudeStreamResponse{
 		stream: stream,
@@ -367,10 +357,8 @@ func (m *ClaudeLLM) StreamGenerateContent(ctx context.Context, contents []*genai
 func (m *ClaudeLLM) WithGenerationConfig(config *genai.GenerationConfig) GenerativeModel {
 	// Create a new instance to avoid copying sync.Once
 	clone := &ClaudeLLM{
-		BaseLLM:        m.BaseLLM.WithGenerationConfig(config),
-		client:         m.client,
-		defaultModel:   m.defaultModel,
-		anthropicError: m.anthropicError,
+		BaseLLM:         m.BaseLLM.WithGenerationConfig(config),
+		anthropicClient: m.anthropicClient,
 	}
 	return clone
 }
@@ -379,12 +367,17 @@ func (m *ClaudeLLM) WithGenerationConfig(config *genai.GenerationConfig) Generat
 func (m *ClaudeLLM) WithSafetySettings(settings []*genai.SafetySetting) GenerativeModel {
 	// Create a new instance to avoid copying sync.Once
 	clone := &ClaudeLLM{
-		BaseLLM:        m.BaseLLM.WithSafetySettings(settings),
-		client:         m.client,
-		defaultModel:   m.defaultModel,
-		anthropicError: m.anthropicError,
+		BaseLLM:         m.BaseLLM.WithSafetySettings(settings),
+		anthropicClient: m.anthropicClient,
 	}
 	return clone
+}
+
+// ClaudeRequest contains the request parameters for Claude models.
+type ClaudeRequest struct {
+	SystemInstruction string
+	Messages          []*genai.Content
+	Tools             []*genai.Tool
 }
 
 // claudeStreamResponse implements GenerateStreamResponse for Claude models.
