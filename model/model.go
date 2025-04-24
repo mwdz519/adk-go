@@ -9,6 +9,23 @@ import (
 	"google.golang.org/genai"
 )
 
+// Role represents the role of a participant in a conversation.
+type Role = string
+
+const (
+	// RoleSystem is the role of the system.
+	RoleSystem Role = "system"
+
+	// RoleAssistant is the role of the assistant.
+	RoleAssistant Role = "assistant"
+
+	// RoleUser is the role of the user.
+	RoleUser Role = genai.RoleUser
+
+	// RoleModel is the role of the model.
+	RoleModel Role = genai.RoleModel
+)
+
 // Model represents a generative AI model.
 type Model interface {
 	// Name returns the name of the model.
