@@ -33,6 +33,8 @@ type DefaultModelFactory struct {
 	apiKey string
 }
 
+var _ ModelFactory = (*DefaultModelFactory)(nil)
+
 // NewModelFactory creates a new model factory.
 func NewModelFactory(apiKey string) ModelFactory {
 	return &DefaultModelFactory{
