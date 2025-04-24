@@ -16,9 +16,6 @@ type BaseLLM struct {
 	// Model represents the specific LLM model name.
 	model string
 
-	// Client is the genai client for interacting with the model.
-	client *genai.Client
-
 	// GenerationConfig contains configuration for generation.
 	generationConfig *genai.GenerationConfig
 
@@ -29,10 +26,9 @@ type BaseLLM struct {
 var _ Model = (*BaseLLM)(nil)
 
 // NewBaseLLM creates a new BaseLLM instance.
-func NewBaseLLM(model string, client *genai.Client) *BaseLLM {
+func NewBaseLLM(model string) *BaseLLM {
 	return &BaseLLM{
-		model:  model,
-		client: client,
+		model: model,
 	}
 }
 
