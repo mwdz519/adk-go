@@ -41,11 +41,6 @@ var _ GenerativeModel = (*ClaudeLLM)(nil)
 
 // NewClaudeLLM creates a new Claude LLM instance.
 func NewClaudeLLM(ctx context.Context, apiKey string, modelName string) (*ClaudeLLM, error) {
-	// Use default model if none provided
-	if modelName == "" {
-		modelName = ClaudeLLMDefaultModel
-	}
-
 	// Check API key and use [EnvAnthropicAPIKey] environment variable if not provided
 	if apiKey == "" {
 		envApiKey := os.Getenv(EnvAnthropicAPIKey)
@@ -53,6 +48,11 @@ func NewClaudeLLM(ctx context.Context, apiKey string, modelName string) (*Claude
 			return nil, fmt.Errorf("either apiKey arg or %q environment variable must bu set", EnvAnthropicAPIKey)
 		}
 		apiKey = envApiKey
+	}
+
+	// Use default model if none provided
+	if modelName == "" {
+		modelName = ClaudeLLMDefaultModel
 	}
 
 	anthropicClient := anthropic.NewClient(option.WithAPIKey(apiKey))
