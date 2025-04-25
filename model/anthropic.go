@@ -15,6 +15,7 @@ import (
 	"github.com/anthropics/anthropic-sdk-go/option"
 	"github.com/anthropics/anthropic-sdk-go/packages/ssestream"
 	"github.com/anthropics/anthropic-sdk-go/shared/constant"
+	"github.com/bytedance/sonic"
 	"google.golang.org/genai"
 )
 
@@ -535,4 +536,46 @@ func contentToClaudeMessageParam(content *genai.Content) (msgParam anthropic.Mes
 	}
 
 	return msgParam
+}
+
+func claudeContentBlockToPart(contentBlock anthropic.ContentBlockUnion) (*genai.Part, error) {
+	switch cblock := contentBlock.AsAny().(type) {
+	case anthropic.TextBlock:
+		return genai.NewPartFromText(cblock.Text), nil
+
+	case anthropic.ToolUseBlock:
+		if cblock.Input == nil {
+			return nil, fmt.Errorf("Input field must be non-nil: %#v", cblock)
+		}
+		var args map[string]any
+		if err := sonic.ConfigFastest.Unmarshal(cblock.Input, &args); err != nil {
+			return nil, fmt.Errorf("unmarshal ToolUseBlock input: %w", err)
+		}
+		part := genai.NewPartFromFunctionCall(cblock.Name, args)
+		part.FunctionCall.ID = cblock.ID
+		return part, nil
+
+	case anthropic.ThinkingBlock, anthropic.RedactedThinkingBlock:
+		return nil, fmt.Errorf("not supported yet converts %T content block", cblock)
+	}
+
+	return nil, fmt.Errorf("unreachable: no variant present")
+}
+
+func claudeMessageToGenerateContentResponse(message anthropic.Message) *LLMResponse {
+	parts := make([]*genai.Part, 0, len(message.Content))
+	for _, content := range message.Content {
+		part, err := claudeContentBlockToPart(content)
+		if err != nil {
+			continue
+		}
+		parts = append(parts, part)
+	}
+
+	return &LLMResponse{
+		Content: &genai.Content{
+			Role:  RoleModel,
+			Parts: parts,
+		},
+	}
 }
