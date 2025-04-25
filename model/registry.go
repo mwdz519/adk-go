@@ -18,7 +18,7 @@ func init() {
 			`claude-.*`, // General pattern for Claude models
 		},
 		func(ctx context.Context, apiKey string, modelName string) (Model, error) {
-			return NewClaudeLLM(ctx, apiKey, modelName)
+			return NewClaude(ctx, apiKey, modelName)
 		},
 	)
 
@@ -30,7 +30,7 @@ func init() {
 			`projects\/.*\/locations\/.*\/publishers\/google\/models\/gemini-.*`,
 		},
 		func(ctx context.Context, apiKey string, modelName string) (Model, error) {
-			return NewGeminiLLM(ctx, apiKey, modelName)
+			return NewGemini(ctx, apiKey, modelName)
 		},
 	)
 }

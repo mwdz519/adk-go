@@ -21,18 +21,18 @@ const (
 	EnvGoogleAPIKey = "GOOGLE_API_KEY"
 )
 
-// GeminiLLM represents a Google Gemini Large Language Model.
-type GeminiLLM struct {
+// Gemini represents a Google Gemini Large Language Model.
+type Gemini struct {
 	*BaseLLM
 
 	genAIClient     *genai.Client
 	trackingHeaders map[string]string
 }
 
-var _ GenerativeModel = (*GeminiLLM)(nil)
+var _ GenerativeModel = (*Gemini)(nil)
 
-// NewGeminiLLM creates a new [GeminiLLM] instance.
-func NewGeminiLLM(ctx context.Context, apiKey string, modelName string) (*GeminiLLM, error) {
+// NewGemini creates a new [Gemini] instance.
+func NewGemini(ctx context.Context, apiKey string, modelName string) (*Gemini, error) {
 	// Use default model if none provided
 	if modelName == "" {
 		modelName = GeminiLLMDefaultModel
@@ -55,7 +55,7 @@ func NewGeminiLLM(ctx context.Context, apiKey string, modelName string) (*Gemini
 		return nil, fmt.Errorf("failed to create genai client: %w", err)
 	}
 
-	return &GeminiLLM{
+	return &Gemini{
 		BaseLLM:         NewBaseLLM(modelName),
 		genAIClient:     genAIClient,
 		trackingHeaders: make(map[string]string),
@@ -63,7 +63,7 @@ func NewGeminiLLM(ctx context.Context, apiKey string, modelName string) (*Gemini
 }
 
 // SupportedModels returns a list of supported Gemini models.
-func (m *GeminiLLM) SupportedModels() []string {
+func (m *Gemini) SupportedModels() []string {
 	return []string{
 		"gemini-1.0-pro",
 		"gemini-1.5-pro",
@@ -72,14 +72,14 @@ func (m *GeminiLLM) SupportedModels() []string {
 }
 
 // Connect creates a live connection to the Gemini LLM.
-func (m *GeminiLLM) Connect() (BaseLLMConnection, error) {
+func (m *Gemini) Connect() (BaseLLMConnection, error) {
 	// Ensure we have an API client
 	// Create and return a new connection
 	return newGeminiLLMConnection(m.model, m.genAIClient), nil
 }
 
 // maybeAppendUserContent checks if the last message is from the user and if not, appends an empty user message.
-func (m *GeminiLLM) maybeAppendUserContent(contents []*genai.Content) []*genai.Content {
+func (m *Gemini) maybeAppendUserContent(contents []*genai.Content) []*genai.Content {
 	if len(contents) == 0 {
 		return []*genai.Content{{
 			Role:  "user",
@@ -99,7 +99,7 @@ func (m *GeminiLLM) maybeAppendUserContent(contents []*genai.Content) []*genai.C
 }
 
 // Generate generates content from the model.
-func (m *GeminiLLM) Generate(ctx context.Context, request GenerateRequest) (*GenerateResponse, error) {
+func (m *Gemini) Generate(ctx context.Context, request GenerateRequest) (*GenerateResponse, error) {
 	// Get access to the Models service
 	models := m.genAIClient.Models
 
@@ -134,7 +134,7 @@ func (m *GeminiLLM) Generate(ctx context.Context, request GenerateRequest) (*Gen
 }
 
 // GenerateContent generates content from the model.
-func (m *GeminiLLM) GenerateContent(ctx context.Context, contents []*genai.Content, config *genai.GenerateContentConfig) (*genai.GenerateContentResponse, error) {
+func (m *Gemini) GenerateContent(ctx context.Context, contents []*genai.Content, config *genai.GenerateContentConfig) (*genai.GenerateContentResponse, error) {
 	// Get access to the Models service
 	models := m.genAIClient.Models
 
@@ -157,7 +157,7 @@ func (m *GeminiLLM) GenerateContent(ctx context.Context, contents []*genai.Conte
 }
 
 // StreamGenerate streams generated content from the model.
-func (m *GeminiLLM) StreamGenerate(ctx context.Context, request GenerateRequest) (StreamGenerateResponse, error) {
+func (m *Gemini) StreamGenerate(ctx context.Context, request GenerateRequest) (StreamGenerateResponse, error) {
 	// Get access to the Models service
 	models := m.genAIClient.Models
 
@@ -189,7 +189,7 @@ func (m *GeminiLLM) StreamGenerate(ctx context.Context, request GenerateRequest)
 }
 
 // StreamGenerateContent streams generated content from the model.
-func (m *GeminiLLM) StreamGenerateContent(ctx context.Context, contents []*genai.Content, config *genai.GenerateContentConfig) (StreamGenerateResponse, error) {
+func (m *Gemini) StreamGenerateContent(ctx context.Context, contents []*genai.Content, config *genai.GenerateContentConfig) (StreamGenerateResponse, error) {
 	// Get access to the Models service
 	models := m.genAIClient.Models
 
@@ -216,9 +216,9 @@ func (m *GeminiLLM) StreamGenerateContent(ctx context.Context, contents []*genai
 }
 
 // WithGenerationConfig returns a new model with the specified generation config.
-func (m *GeminiLLM) WithGenerationConfig(config *genai.GenerationConfig) GenerativeModel {
+func (m *Gemini) WithGenerationConfig(config *genai.GenerationConfig) GenerativeModel {
 	// Create a new instance to avoid modifying the original
-	clone := &GeminiLLM{
+	clone := &Gemini{
 		BaseLLM:         m.BaseLLM.WithGenerationConfig(config),
 		genAIClient:     m.genAIClient,
 		trackingHeaders: m.trackingHeaders,
@@ -227,9 +227,9 @@ func (m *GeminiLLM) WithGenerationConfig(config *genai.GenerationConfig) Generat
 }
 
 // WithSafetySettings returns a new model with the specified safety settings.
-func (m *GeminiLLM) WithSafetySettings(settings []*genai.SafetySetting) GenerativeModel {
+func (m *Gemini) WithSafetySettings(settings []*genai.SafetySetting) GenerativeModel {
 	// Create a new instance to avoid modifying the original
-	clone := &GeminiLLM{
+	clone := &Gemini{
 		BaseLLM:         m.BaseLLM.WithSafetySettings(settings),
 		genAIClient:     m.genAIClient,
 		trackingHeaders: m.trackingHeaders,
@@ -237,7 +237,7 @@ func (m *GeminiLLM) WithSafetySettings(settings []*genai.SafetySetting) Generati
 	return clone
 }
 
-// geminiStreamResponse implements [StreamGenerateResponse] for [GeminiLLM].
+// geminiStreamResponse implements [StreamGenerateResponse] for [Gemini].
 type geminiStreamResponse struct {
 	stream    iter.Seq2[*genai.GenerateContentResponse, error]
 	streamIdx int

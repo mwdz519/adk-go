@@ -55,9 +55,9 @@ func (f *DefaultModelFactory) CreateModel(ctx context.Context, modelName string)
 
 	switch modelType {
 	case ModelTypeGemini:
-		return NewGeminiLLM(ctx, f.apiKey, modelName)
+		return NewGemini(ctx, f.apiKey, modelName)
 	case ModelTypeClaude:
-		return NewClaudeLLM(ctx, f.apiKey, modelName)
+		return NewClaude(ctx, f.apiKey, modelName)
 	default:
 		return nil, fmt.Errorf("unsupported model: %s", modelName)
 	}
@@ -80,9 +80,9 @@ func (f *DefaultModelFactory) CreateGenerativeModel(ctx context.Context, modelNa
 
 	switch modelType {
 	case ModelTypeGemini:
-		return NewGeminiLLM(ctx, f.apiKey, modelName)
+		return NewGemini(ctx, f.apiKey, modelName)
 	case ModelTypeClaude:
-		return NewClaudeLLM(ctx, f.apiKey, modelName)
+		return NewClaude(ctx, f.apiKey, modelName)
 	default:
 		return nil, fmt.Errorf("unsupported model: %s", modelName)
 	}
