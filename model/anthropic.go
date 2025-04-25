@@ -468,6 +468,24 @@ func asClaudeRole(role string) anthropic.MessageParamRole {
 	return anthropic.MessageParamRoleUser
 }
 
+var claudeStopReasons = []anthropic.BetaMessageStopReason{
+	anthropic.BetaMessageStopReasonEndTurn,
+	anthropic.BetaMessageStopReasonStopSequence,
+	anthropic.BetaMessageStopReasonToolUse,
+}
+
+func asclaudeToFinishReason(stopReason anthropic.BetaMessageStopReason) genai.FinishReason {
+	if slices.Contains(claudeStopReasons, stopReason) {
+		return genai.FinishReasonStop
+	}
+
+	if stopReason == anthropic.BetaMessageStopReasonMaxTokens {
+		return genai.FinishReasonMaxTokens
+	}
+
+	return genai.FinishReasonUnspecified
+}
+
 func partToClaudeMessageBlock(part *genai.Part) (anthropic.ContentBlockParamUnion, error) {
 	if part.Text != "" {
 		params := anthropic.NewTextBlock(part.Text)
