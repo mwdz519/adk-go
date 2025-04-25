@@ -23,7 +23,7 @@ const (
 
 // Gemini represents a Google Gemini Large Language Model.
 type Gemini struct {
-	*BaseLLM
+	*Base
 
 	genAIClient     *genai.Client
 	trackingHeaders map[string]string
@@ -56,7 +56,7 @@ func NewGemini(ctx context.Context, apiKey string, modelName string) (*Gemini, e
 	}
 
 	return &Gemini{
-		BaseLLM:         NewBaseLLM(modelName),
+		Base:            NewBase(modelName),
 		genAIClient:     genAIClient,
 		trackingHeaders: make(map[string]string),
 	}, nil
@@ -219,7 +219,7 @@ func (m *Gemini) StreamGenerateContent(ctx context.Context, contents []*genai.Co
 func (m *Gemini) WithGenerationConfig(config *genai.GenerationConfig) GenerativeModel {
 	// Create a new instance to avoid modifying the original
 	clone := &Gemini{
-		BaseLLM:         m.BaseLLM.WithGenerationConfig(config),
+		Base:            m.Base.WithGenerationConfig(config),
 		genAIClient:     m.genAIClient,
 		trackingHeaders: m.trackingHeaders,
 	}
@@ -230,7 +230,7 @@ func (m *Gemini) WithGenerationConfig(config *genai.GenerationConfig) Generative
 func (m *Gemini) WithSafetySettings(settings []*genai.SafetySetting) GenerativeModel {
 	// Create a new instance to avoid modifying the original
 	clone := &Gemini{
-		BaseLLM:         m.BaseLLM.WithSafetySettings(settings),
+		Base:            m.Base.WithSafetySettings(settings),
 		genAIClient:     m.genAIClient,
 		trackingHeaders: m.trackingHeaders,
 	}

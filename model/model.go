@@ -84,7 +84,7 @@ type StreamGenerateResponse interface {
 
 // BaseGenerativeModel provides a base implementation of GenerativeModel.
 type BaseGenerativeModel struct {
-	*BaseLLM
+	*Base
 }
 
 var _ GenerativeModel = (*BaseGenerativeModel)(nil)
@@ -92,40 +92,40 @@ var _ GenerativeModel = (*BaseGenerativeModel)(nil)
 // NewBaseGenerativeModel creates a new base generative model.
 func NewBaseGenerativeModel(name string) *BaseGenerativeModel {
 	return &BaseGenerativeModel{
-		BaseLLM: NewBaseLLM(name),
+		Base: NewBase(name),
 	}
 }
 
 // WithGenerationConfig returns a new model with the specified generation config.
 func (m *BaseGenerativeModel) WithGenerationConfig(config *genai.GenerationConfig) GenerativeModel {
 	clone := *m
-	clone.BaseLLM = m.BaseLLM.WithGenerationConfig(config)
+	clone.Base = m.Base.WithGenerationConfig(config)
 	return &clone
 }
 
 // WithSafetySettings returns a new model with the specified safety settings.
 func (m *BaseGenerativeModel) WithSafetySettings(settings []*genai.SafetySetting) GenerativeModel {
 	clone := *m
-	clone.BaseLLM = m.BaseLLM.WithSafetySettings(settings)
+	clone.Base = m.Base.WithSafetySettings(settings)
 	return &clone
 }
 
 // Generate generates content from the model.
 func (m *BaseGenerativeModel) Generate(ctx context.Context, request GenerateRequest) (*GenerateResponse, error) {
-	return m.BaseLLM.Generate(ctx, request)
+	return m.Base.Generate(ctx, request)
 }
 
 // GenerateContent generates content from the model.
 func (m *BaseGenerativeModel) GenerateContent(ctx context.Context, contents []*genai.Content, config *genai.GenerateContentConfig) (*genai.GenerateContentResponse, error) {
-	return m.BaseLLM.GenerateContent(ctx, contents, config)
+	return m.Base.GenerateContent(ctx, contents, config)
 }
 
 // StreamGenerate streams generated content from the model.
 func (m *BaseGenerativeModel) StreamGenerate(ctx context.Context, request GenerateRequest) (StreamGenerateResponse, error) {
-	return m.BaseLLM.StreamGenerate(ctx, request)
+	return m.Base.StreamGenerate(ctx, request)
 }
 
 // StreamGenerateContent streams generated content from the model.
 func (m *BaseGenerativeModel) StreamGenerateContent(ctx context.Context, contents []*genai.Content, config *genai.GenerateContentConfig) (StreamGenerateResponse, error) {
-	return m.BaseLLM.StreamGenerateContent(ctx, contents, config)
+	return m.Base.StreamGenerateContent(ctx, contents, config)
 }

@@ -32,7 +32,7 @@ const (
 
 // Claude represents a Claude Large Language Model.
 type Claude struct {
-	*BaseLLM
+	*Base
 
 	anthropicClient anthropic.Client
 }
@@ -58,7 +58,7 @@ func NewClaude(ctx context.Context, apiKey string, modelName string) (*Claude, e
 	anthropicClient := anthropic.NewClient(option.WithAPIKey(apiKey))
 
 	return &Claude{
-		BaseLLM:         NewBaseLLM(modelName),
+		Base:            NewBase(modelName),
 		anthropicClient: anthropicClient,
 	}, nil
 }
@@ -368,7 +368,7 @@ func (m *Claude) StreamGenerateContent(ctx context.Context, contents []*genai.Co
 func (m *Claude) WithGenerationConfig(config *genai.GenerationConfig) GenerativeModel {
 	// Create a new instance to avoid copying sync.Once
 	return &Claude{
-		BaseLLM:         m.BaseLLM.WithGenerationConfig(config),
+		Base:            m.Base.WithGenerationConfig(config),
 		anthropicClient: m.anthropicClient,
 	}
 }
@@ -377,7 +377,7 @@ func (m *Claude) WithGenerationConfig(config *genai.GenerationConfig) Generative
 func (m *Claude) WithSafetySettings(settings []*genai.SafetySetting) GenerativeModel {
 	// Create a new instance to avoid copying sync.Once
 	return &Claude{
-		BaseLLM:         m.BaseLLM.WithSafetySettings(settings),
+		Base:            m.Base.WithSafetySettings(settings),
 		anthropicClient: m.anthropicClient,
 	}
 }
