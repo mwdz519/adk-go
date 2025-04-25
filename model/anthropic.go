@@ -30,17 +30,17 @@ const (
 	EnvAnthropicAPIKey = "ANTHROPIC_API_KEY"
 )
 
-// ClaudeLLM represents a Claude Large Language Model.
-type ClaudeLLM struct {
+// Claude represents a Claude Large Language Model.
+type Claude struct {
 	*BaseLLM
 
 	anthropicClient anthropic.Client
 }
 
-var _ GenerativeModel = (*ClaudeLLM)(nil)
+var _ GenerativeModel = (*Claude)(nil)
 
-// NewClaudeLLM creates a new Claude LLM instance.
-func NewClaudeLLM(ctx context.Context, apiKey string, modelName string) (*ClaudeLLM, error) {
+// NewClaude creates a new Claude LLM instance.
+func NewClaude(ctx context.Context, apiKey string, modelName string) (*Claude, error) {
 	// Check API key and use [EnvAnthropicAPIKey] environment variable if not provided
 	if apiKey == "" {
 		envApiKey := os.Getenv(EnvAnthropicAPIKey)
@@ -57,14 +57,14 @@ func NewClaudeLLM(ctx context.Context, apiKey string, modelName string) (*Claude
 
 	anthropicClient := anthropic.NewClient(option.WithAPIKey(apiKey))
 
-	return &ClaudeLLM{
+	return &Claude{
 		BaseLLM:         NewBaseLLM(modelName),
 		anthropicClient: anthropicClient,
 	}, nil
 }
 
 // SupportedModels returns a list of supported Claude models.
-func (m *ClaudeLLM) SupportedModels() []string {
+func (m *Claude) SupportedModels() []string {
 	return []string{
 		// GCP Vertex AI
 		"claude-3-7-sonnet@20250219",
@@ -90,7 +90,7 @@ func (m *ClaudeLLM) SupportedModels() []string {
 // Connect creates a live connection to the Claude LLM.
 //
 // TODO(zchee): implements.
-func (m *ClaudeLLM) Connect() (BaseLLMConnection, error) {
+func (m *Claude) Connect() (BaseLLMConnection, error) {
 	// Ensure we can get an Anthropic client
 	_ = m.anthropicClient
 
@@ -141,7 +141,7 @@ func extractFunctionDeclarations(contents []*genai.Content) []anthropic.ToolUnio
 }
 
 // Generate generates content from the model.
-func (m *ClaudeLLM) Generate(ctx context.Context, request GenerateRequest) (*GenerateResponse, error) {
+func (m *Claude) Generate(ctx context.Context, request GenerateRequest) (*GenerateResponse, error) {
 	// Convert messages to Anthropic format
 	messageParams := make([]anthropic.MessageParam, len(request.Content))
 	for i, content := range request.Content {
@@ -239,7 +239,7 @@ func anthropicMessageToGenAIContent(message *anthropic.Message) *genai.Content {
 }
 
 // GenerateContent generates content from the model.
-func (m *ClaudeLLM) GenerateContent(ctx context.Context, contents []*genai.Content, config *genai.GenerateContentConfig) (*genai.GenerateContentResponse, error) {
+func (m *Claude) GenerateContent(ctx context.Context, contents []*genai.Content, config *genai.GenerateContentConfig) (*genai.GenerateContentResponse, error) {
 	request := GenerateRequest{
 		Content: contents,
 	}
@@ -272,7 +272,7 @@ func (m *ClaudeLLM) GenerateContent(ctx context.Context, contents []*genai.Conte
 }
 
 // StreamGenerate streams generated content from the model.
-func (m *ClaudeLLM) StreamGenerate(ctx context.Context, request GenerateRequest) (StreamGenerateResponse, error) {
+func (m *Claude) StreamGenerate(ctx context.Context, request GenerateRequest) (StreamGenerateResponse, error) {
 	// Convert to Anthropic format
 	msgParams := make([]anthropic.MessageParam, len(request.Content))
 	for i, content := range request.Content {
@@ -337,7 +337,7 @@ func (m *ClaudeLLM) StreamGenerate(ctx context.Context, request GenerateRequest)
 }
 
 // StreamGenerateContent streams generated content from the model.
-func (m *ClaudeLLM) StreamGenerateContent(ctx context.Context, contents []*genai.Content, config *genai.GenerateContentConfig) (StreamGenerateResponse, error) {
+func (m *Claude) StreamGenerateContent(ctx context.Context, contents []*genai.Content, config *genai.GenerateContentConfig) (StreamGenerateResponse, error) {
 	request := GenerateRequest{
 		Content: contents,
 	}
@@ -365,18 +365,18 @@ func (m *ClaudeLLM) StreamGenerateContent(ctx context.Context, contents []*genai
 }
 
 // WithGenerationConfig returns a new model with the specified generation config.
-func (m *ClaudeLLM) WithGenerationConfig(config *genai.GenerationConfig) GenerativeModel {
+func (m *Claude) WithGenerationConfig(config *genai.GenerationConfig) GenerativeModel {
 	// Create a new instance to avoid copying sync.Once
-	return &ClaudeLLM{
+	return &Claude{
 		BaseLLM:         m.BaseLLM.WithGenerationConfig(config),
 		anthropicClient: m.anthropicClient,
 	}
 }
 
 // WithSafetySettings returns a new model with the specified safety settings.
-func (m *ClaudeLLM) WithSafetySettings(settings []*genai.SafetySetting) GenerativeModel {
+func (m *Claude) WithSafetySettings(settings []*genai.SafetySetting) GenerativeModel {
 	// Create a new instance to avoid copying sync.Once
-	return &ClaudeLLM{
+	return &Claude{
 		BaseLLM:         m.BaseLLM.WithSafetySettings(settings),
 		anthropicClient: m.anthropicClient,
 	}
