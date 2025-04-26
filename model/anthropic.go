@@ -507,9 +507,9 @@ func partToClaudeMessageBlock(part *genai.Part) (anthropic.ContentBlockParamUnio
 	}
 
 	if part.FunctionResponse != nil {
-		funcResponse := part.FunctionResponse
-		if result, ok := funcResponse.Response["result"]; ok {
-			params := anthropic.NewToolResultBlock(funcResponse.ID, fmt.Sprintf("%s", result), false)
+		funcResp := part.FunctionResponse
+		if result, ok := funcResp.Response["result"]; ok {
+			params := anthropic.NewToolResultBlock(funcResp.ID, fmt.Sprintf("%s", result), false)
 			params.OfRequestToolResultBlock.Type = constant.ValueOf[constant.ToolResult]().Default()
 			return params, nil
 		}
@@ -539,24 +539,24 @@ func contentToClaudeMessageParam(content *genai.Content) (msgParam anthropic.Mes
 }
 
 func claudeContentBlockToPart(contentBlock anthropic.ContentBlockUnion) (*genai.Part, error) {
-	switch cblock := contentBlock.AsAny().(type) {
+	switch cBlock := contentBlock.AsAny().(type) {
 	case anthropic.TextBlock:
-		return genai.NewPartFromText(cblock.Text), nil
+		return genai.NewPartFromText(cBlock.Text), nil
 
 	case anthropic.ToolUseBlock:
-		if cblock.Input == nil {
-			return nil, fmt.Errorf("Input field must be non-nil: %#v", cblock)
+		if cBlock.Input == nil {
+			return nil, fmt.Errorf("Input field must be non-nil: %#v", cBlock)
 		}
 		var args map[string]any
-		if err := sonic.ConfigFastest.Unmarshal(cblock.Input, &args); err != nil {
+		if err := sonic.ConfigFastest.Unmarshal(cBlock.Input, &args); err != nil {
 			return nil, fmt.Errorf("unmarshal ToolUseBlock input: %w", err)
 		}
-		part := genai.NewPartFromFunctionCall(cblock.Name, args)
-		part.FunctionCall.ID = cblock.ID
+		part := genai.NewPartFromFunctionCall(cBlock.Name, args)
+		part.FunctionCall.ID = cBlock.ID
 		return part, nil
 
 	case anthropic.ThinkingBlock, anthropic.RedactedThinkingBlock:
-		return nil, fmt.Errorf("not supported yet converts %T content block", cblock)
+		return nil, fmt.Errorf("not supported yet converts %T content block", cBlock)
 	}
 
 	return nil, fmt.Errorf("unreachable: no variant present")
@@ -564,8 +564,8 @@ func claudeContentBlockToPart(contentBlock anthropic.ContentBlockUnion) (*genai.
 
 func claudeMessageToGenerateContentResponse(message anthropic.Message) *LLMResponse {
 	parts := make([]*genai.Part, 0, len(message.Content))
-	for _, content := range message.Content {
-		part, err := claudeContentBlockToPart(content)
+	for _, mcontent := range message.Content {
+		part, err := claudeContentBlockToPart(mcontent)
 		if err != nil {
 			continue
 		}
@@ -577,5 +577,14 @@ func claudeMessageToGenerateContentResponse(message anthropic.Message) *LLMRespo
 			Role:  RoleModel,
 			Parts: parts,
 		},
+		// TODO: Deal with these later.
+		// finish_reason=to_google_genai_finish_reason(message.stop_reason),
+		// usage_metadata=types.GenerateContentResponseUsageMetadata(
+		//     prompt_token_count=message.usage.input_tokens,
+		//     candidates_token_count=message.usage.output_tokens,
+		//     total_token_count=(
+		//         message.usage.input_tokens + message.usage.output_tokens
+		//     ),
+		// ),
 	}
 }
