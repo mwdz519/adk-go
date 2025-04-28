@@ -3,7 +3,7 @@ module github.com/go-a2a/adk-go
 go 1.24
 
 require (
-	github.com/anthropics/anthropic-sdk-go v0.2.0-beta.3
+	github.com/anthropics/anthropic-sdk-go v0.2.0-beta.3.0.20250428050646-d1f3c8cdd24b // v0.2.0-beta.4: release-please--branches--main--changes--next
 	github.com/bytedance/sonic v1.13.2
 	google.golang.org/genai v1.2.0
 )
@@ -33,7 +33,7 @@ require (
 	go.opentelemetry.io/otel v1.35.0 // indirect
 	go.opentelemetry.io/otel/metric v1.35.0 // indirect
 	go.opentelemetry.io/otel/trace v1.35.0 // indirect
-	golang.org/x/arch v0.0.0-20210923205945-b76863e36670 // indirect
+	golang.org/x/arch v0.16.0 // indirect
 	golang.org/x/crypto v0.37.0 // indirect
 	golang.org/x/net v0.39.0 // indirect
 	golang.org/x/sys v0.32.0 // indirect
