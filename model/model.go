@@ -41,26 +41,6 @@ type Model interface {
 	GenerateContent(ctx context.Context, contents []*genai.Content, config *genai.GenerateContentConfig) (*genai.GenerateContentResponse, error)
 }
 
-// Config represents an additional config for the generate content request.
-//
-// tools in generate_content_config should not be set.
-type Config struct {
-	*genai.GenerationConfig
-	*genai.CountTokensConfig
-}
-
-// GenerateRequest represents a request to generate content.
-type GenerateRequest struct {
-	// Content is the content to generate from.
-	Content []*genai.Content
-
-	// GenerationConfig is the configuration for generation.
-	GenerationConfig *Config
-
-	// SafetySettings are the safety settings for generation.
-	SafetySettings []*genai.SafetySetting
-}
-
 // GenerateResponse represents a response from generating content.
 type GenerateResponse struct {
 	// Content is the generated content.

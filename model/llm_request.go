@@ -130,66 +130,6 @@ func (r *LLMRequest) ToJSON() (string, error) {
 	return string(bytes), nil
 }
 
-// ToGenerateRequest converts the LLMRequest to a GenerateRequest.
-func (r *LLMRequest) ToGenerateRequest() *GenerateRequest {
-	// Convert our Content type to genai.Content
-	genaiContents := make([]*genai.Content, 0, len(r.Contents))
-	for _, content := range r.Contents {
-		// Create a genai.Content with text parts
-		genContent := &genai.Content{
-			Role:  content.Role,
-			Parts: []*genai.Part{},
-		}
-
-		// Add text parts
-		for _, part := range content.Parts {
-			if part.Text != "" {
-				genContent.Parts = append(genContent.Parts, genai.NewPartFromText(part.Text))
-			}
-			// Note: For simplicity, we're only handling text parts for now
-		}
-
-		genaiContents = append(genaiContents, genContent)
-	}
-
-	// Convert our GenerationConfig to genai.GenerationConfig
-	var genConfig *Config
-	if r.Config != nil {
-		genConfig = &Config{
-			GenerationConfig: &genai.GenerationConfig{
-				MaxOutputTokens: int32(r.Config.MaxOutputTokens),
-				StopSequences:   r.Config.StopSequences,
-			},
-		}
-
-		// Add optional fields
-		if *r.Config.Temperature > 0 {
-			genConfig.Temperature = r.Config.Temperature
-		}
-
-		if *r.Config.TopK > 0 {
-			genConfig.TopK = r.Config.TopK
-		}
-
-		if *r.Config.TopP > 0 {
-			genConfig.TopP = r.Config.TopP
-		}
-
-		if r.Config.CandidateCount > 0 {
-			genConfig.CandidateCount = int32(r.Config.CandidateCount)
-		}
-	}
-
-	// Convert our SafetySettings to genai.SafetySetting - skipping for now due to type mismatch
-	genSafetySettings := make([]*genai.SafetySetting, 0)
-
-	return &GenerateRequest{
-		Content:          genaiContents,
-		GenerationConfig: genConfig,
-		SafetySettings:   genSafetySettings,
-	}
-}
-
 // ToGenerateContentConfig converts the LLMRequest to a genai.GenerateContentConfig.
 func (r *LLMRequest) ToGenerateContentConfig() *genai.GenerateContentConfig {
 	config := &genai.GenerateContentConfig{}
