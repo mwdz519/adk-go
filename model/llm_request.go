@@ -11,36 +11,6 @@ import (
 	"google.golang.org/genai"
 )
 
-// ToolDeclaration represents a tool declaration that can be used by an LLM.
-type ToolDeclaration struct {
-	Name        string         `json:"name"`
-	Description string         `json:"description"`
-	Parameters  map[string]any `json:"parameters"`
-}
-
-// Tool represents a tool the model can use to provide additional capabilities.
-type Tool struct {
-	FunctionDeclarations []*ToolDeclaration `json:"function_declarations,omitempty"`
-}
-
-// NewTool creates a new tool instance.
-func NewTool() *Tool {
-	return &Tool{
-		FunctionDeclarations: []*ToolDeclaration{},
-	}
-}
-
-// AddFunctionDeclaration adds a function declaration to the tool.
-func (t *Tool) AddFunctionDeclaration(declaration *ToolDeclaration) {
-	t.FunctionDeclarations = append(t.FunctionDeclarations, declaration)
-}
-
-// SafetySetting represents a safety setting for content generation.
-type SafetySetting struct {
-	Category  string `json:"category"`
-	Threshold string `json:"threshold"`
-}
-
 // Blob represents binary data with a MIME type.
 type Blob struct {
 	MimeType string `json:"mime_type"`
@@ -61,9 +31,9 @@ type LLMRequest struct {
 	LiveConnectConfig  *genai.LiveConnectConfig `json:"live_connect_config,omitempty"`
 	CountTokensConfig  *genai.CountTokensConfig `json:"count_tokens_config,omitempty"`
 	SystemInstructions []string                 `json:"system_instructions,omitempty"`
-	Tools              []*Tool                  `json:"tools,omitempty"`
-	ToolMap            map[string]*Tool         `json:"tool_map,omitempty"`
-	SafetySettings     []*SafetySetting         `json:"safety_settings,omitempty"`
+	Tools              []*genai.Tool            `json:"tools,omitempty"`
+	ToolMap            map[string]*genai.Tool   `json:"tool_map,omitempty"`
+	SafetySettings     []*genai.SafetySetting   `json:"safety_settings,omitempty"`
 	OutputSchema       map[string]any           `json:"output_schema,omitempty"`
 }
 
@@ -118,7 +88,7 @@ func (r *LLMRequest) AppendInstructions(instructions ...string) *LLMRequest {
 }
 
 // AppendTools adds tools to the request.
-func (r *LLMRequest) AppendTools(tools ...*Tool) *LLMRequest {
+func (r *LLMRequest) AppendTools(tools ...*genai.Tool) *LLMRequest {
 	r.Tools = append(r.Tools, tools...)
 	return r
 }
@@ -130,7 +100,7 @@ func (r *LLMRequest) WithGenerationConfig(config *genai.GenerationConfig) *LLMRe
 }
 
 // WithSafetySettings sets the safety settings.
-func (r *LLMRequest) WithSafetySettings(settings ...*SafetySetting) *LLMRequest {
+func (r *LLMRequest) WithSafetySettings(settings ...*genai.SafetySetting) *LLMRequest {
 	r.SafetySettings = append(r.SafetySettings, settings...)
 	return r
 }
