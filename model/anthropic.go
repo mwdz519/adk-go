@@ -155,15 +155,15 @@ func extractFunctionDeclarations(contents []*genai.Content) []anthropic.ToolUnio
 // Generate generates content from the model.
 func (m *Claude) Generate(ctx context.Context, request GenerateRequest) (*GenerateResponse, error) {
 	// Convert messages to Anthropic format
-	messageParams := make([]anthropic.MessageParam, len(request.Content))
+	msgParams := make([]anthropic.MessageParam, len(request.Content))
 	for i, content := range request.Content {
-		messageParams[i] = contentToClaudeMessageParam(content)
+		msgParams[i] = contentToClaudeMessageParam(content)
 	}
 
 	// Prepare parameters
 	params := anthropic.MessageNewParams{
 		Model:     anthropic.Model(m.model),
-		Messages:  messageParams,
+		Messages:  msgParams,
 		MaxTokens: 4096,
 	}
 
@@ -196,9 +196,9 @@ func (m *Claude) Generate(ctx context.Context, request GenerateRequest) (*Genera
 
 		// Remove system message from the message list since it's set separately
 		// Only if there are more than one message, otherwise we keep the empty list
-		if len(messageParams) > 1 {
-			messageParams = messageParams[1:]
-			params.Messages = messageParams
+		if len(msgParams) > 1 {
+			msgParams = msgParams[1:]
+			params.Messages = msgParams
 		}
 	}
 
@@ -556,7 +556,7 @@ func claudeContentBlockToPart(contentBlock anthropic.ContentBlockUnion) (*genai.
 
 	case anthropic.ToolUseBlock:
 		if cBlock.Input == nil {
-			return nil, fmt.Errorf("Input field must be non-nil: %#v", cBlock)
+			return nil, fmt.Errorf("input field must be non-nil: %#v", cBlock)
 		}
 		var args map[string]any
 		if err := sonic.ConfigFastest.Unmarshal(cBlock.Input, &args); err != nil {
