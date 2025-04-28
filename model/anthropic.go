@@ -155,15 +155,15 @@ func extractFunctionDeclarations(contents []*genai.Content) []anthropic.ToolUnio
 // Generate generates content from the model.
 func (m *Claude) Generate(ctx context.Context, request GenerateRequest) (*GenerateResponse, error) {
 	// Convert messages to Anthropic format
-	msgParams := make([]anthropic.MessageParam, len(request.Content))
+	messages := make([]anthropic.MessageParam, len(request.Content))
 	for i, content := range request.Content {
-		msgParams[i] = contentToClaudeMessageParam(content)
+		messages[i] = contentToClaudeMessageParam(content)
 	}
 
 	// Prepare parameters
 	params := anthropic.MessageNewParams{
 		Model:     anthropic.Model(m.model),
-		Messages:  msgParams,
+		Messages:  messages,
 		MaxTokens: 4096,
 	}
 
@@ -196,9 +196,9 @@ func (m *Claude) Generate(ctx context.Context, request GenerateRequest) (*Genera
 
 		// Remove system message from the message list since it's set separately
 		// Only if there are more than one message, otherwise we keep the empty list
-		if len(msgParams) > 1 {
-			msgParams = msgParams[1:]
-			params.Messages = msgParams
+		if len(messages) > 1 {
+			messages = messages[1:]
+			params.Messages = messages
 		}
 	}
 
@@ -257,7 +257,7 @@ func (m *Claude) GenerateContent(ctx context.Context, contents []*genai.Content,
 	}
 
 	if config != nil {
-		genConfig := &genai.GenerationConfig{}
+		genConfig := &Config{}
 		if config.Temperature != nil {
 			genConfig.Temperature = config.Temperature
 		}
@@ -286,15 +286,15 @@ func (m *Claude) GenerateContent(ctx context.Context, contents []*genai.Content,
 // StreamGenerate streams generated content from the model.
 func (m *Claude) StreamGenerate(ctx context.Context, request GenerateRequest) (StreamGenerateResponse, error) {
 	// Convert to Anthropic format
-	msgParams := make([]anthropic.MessageParam, len(request.Content))
+	messages := make([]anthropic.MessageParam, len(request.Content))
 	for i, content := range request.Content {
-		msgParams[i] = contentToClaudeMessageParam(content)
+		messages[i] = contentToClaudeMessageParam(content)
 	}
 
 	// Prepare parameters
 	params := anthropic.MessageNewParams{
 		Model:     anthropic.Model(m.model),
-		Messages:  msgParams,
+		Messages:  messages,
 		MaxTokens: 4096,
 	}
 
@@ -327,9 +327,9 @@ func (m *Claude) StreamGenerate(ctx context.Context, request GenerateRequest) (S
 
 		// Remove system message from the message list since it's set separately
 		// Only if there are more than one message, otherwise we keep the empty list
-		if len(msgParams) > 1 {
-			msgParams = msgParams[1:]
-			params.Messages = msgParams
+		if len(messages) > 1 {
+			messages = messages[1:]
+			params.Messages = messages
 		}
 	}
 
@@ -355,7 +355,7 @@ func (m *Claude) StreamGenerateContent(ctx context.Context, contents []*genai.Co
 	}
 
 	if config != nil {
-		genConfig := &genai.GenerationConfig{}
+		genConfig := &Config{}
 		if config.Temperature != nil {
 			genConfig.Temperature = config.Temperature
 		}
@@ -600,9 +600,9 @@ func claudeMessageToGenerateContentResponse(message anthropic.Message) *LLMRespo
 	}
 }
 
-func functionDeclarationToToolParam(funcDeclaration genai.FunctionDeclaration) (toolUnion anthropic.ToolUnionParam, err error) {
+func functionDeclarationToToolParam(funcDeclaration *genai.FunctionDeclaration) (toolUnion anthropic.ToolUnionParam, err error) {
 	if funcDeclaration.Name == "" {
-		return toolUnion, fmt.Errorf("functionDeclaration name is empty")
+		return toolUnion, errors.New("functionDeclaration name is empty")
 	}
 
 	inputSchemaProps := make(map[string]*genai.Schema)
