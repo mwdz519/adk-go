@@ -22,12 +22,12 @@ import (
 )
 
 const (
-	// ClaudeLLMDefaultModel is the default model name for [ClaudeLLM].
+	// ClaudeDefaultModel is the default model name for [Claude].
 	//
 	// This model is only available on Google Cloud Platform (GCP) Vertex AI.
 	// If you want to use the Anthropic official model, pass any model name that is defined in the
-	// anthropic-sdk-go package's constants to [NewClaudeLLM].
-	ClaudeLLMDefaultModel = "claude-3-5-sonnet-v2@20241022"
+	// anthropic-sdk-go package's constants to [NewClaude].
+	ClaudeDefaultModel = "claude-3-5-sonnet-v2@20241022"
 
 	// EnvAnthropicAPIKey is the environment variable name for the Anthropic API key.
 	EnvAnthropicAPIKey = "ANTHROPIC_API_KEY"
@@ -55,7 +55,7 @@ func NewClaude(ctx context.Context, apiKey string, modelName string) (*Claude, e
 
 	// Use default model if none provided
 	if modelName == "" {
-		modelName = ClaudeLLMDefaultModel
+		modelName = ClaudeDefaultModel
 	}
 
 	anthropicClient := anthropic.NewClient(option.WithAPIKey(apiKey))
@@ -106,9 +106,9 @@ func (m *Claude) Connect() (BaseLLMConnection, error) {
 	// Ensure we can get an Anthropic client
 	_ = m.anthropicClient
 
-	// For now, this is a placeholder as we haven't implemented ClaudeLLMConnection yet
-	// In a real implementation, we would return a proper ClaudeLLMConnection
-	return nil, fmt.Errorf("ClaudeLLMConnection not implemented yet")
+	// For now, this is a placeholder as we haven't implemented ClaudeConnection yet
+	// In a real implementation, we would return a proper ClaudeConnection
+	return nil, fmt.Errorf("ClaudeConnection not implemented yet")
 }
 
 // extractSystemPrompt extracts system prompt text from the first message if it's a system message
@@ -126,30 +126,24 @@ func extractSystemPrompt(messages []*genai.Content) (string, bool) {
 	return systemText, systemText != ""
 }
 
-// extractFunctionDeclarations extracts function declarations from content parts
-func extractFunctionDeclarations(contents []*genai.Content) []anthropic.ToolUnionParam {
-	var tools []anthropic.ToolUnionParam
-
-	for _, content := range contents {
-		if content.Parts == nil {
-			continue
-		}
-
-		for _, part := range content.Parts {
-			if part != nil && part.FunctionCall != nil {
-				toolSchema := anthropic.ToolInputSchemaParam{
-					Type:       constant.ValueOf[constant.Object]().Default(),
-					Properties: part,
-				}
-
-				// Create a tool from function
-				tool := anthropic.ToolUnionParamOfTool(toolSchema, part.FunctionCall.Name)
-				tools = append(tools, tool)
-			}
-		}
+func functionDeclarationToToolParam(funcDeclaration *genai.FunctionDeclaration) (toolUnion anthropic.ToolUnionParam, err error) {
+	if funcDeclaration.Name == "" {
+		return toolUnion, errors.New("functionDeclaration name is empty")
 	}
 
-	return tools
+	inputSchemaProps := make(map[string]*genai.Schema)
+	if params := funcDeclaration.Parameters; params != nil && params.Properties != nil {
+		maps.Insert(inputSchemaProps, maps.All(params.Properties))
+	}
+	inputSchema := anthropic.ToolInputSchemaParam{
+		Type:       constant.ValueOf[constant.Object]().Default(),
+		Properties: inputSchemaProps,
+	}
+
+	toolUnion = anthropic.ToolUnionParamOfTool(inputSchema, funcDeclaration.Name)
+	toolUnion.OfTool.Description = param.NewOpt(funcDeclaration.Description)
+
+	return toolUnion, nil
 }
 
 // Generate generates content from the model.
@@ -169,21 +163,27 @@ func (m *Claude) Generate(ctx context.Context, request GenerateRequest) (*Genera
 
 	// Apply generation config if provided
 	if config := request.GenerationConfig; config != nil {
+		// MaxOutputTokens is an int32 directly, not a pointer
+		if config.MaxOutputTokens > 0 {
+			params.MaxTokens = int64(config.MaxOutputTokens)
+		}
+
 		if config.Temperature != nil {
 			params.Temperature = anthropic.Float(float64(*config.Temperature))
 		}
 
-		// MaxOutputTokens is an int32 directly, not a pointer
-		if config.MaxOutputTokens > 0 {
-			params.MaxTokens = int64(config.MaxOutputTokens)
+		if config.TopK != nil {
+			params.TopK = anthropic.Int(int64(*config.TopK))
 		}
 
 		if config.TopP != nil {
 			params.TopP = anthropic.Float(float64(*config.TopP))
 		}
 
-		tools := []anthropic.ToolUnionParam{}
+		// Add tools if provided
+		var tools []anthropic.ToolUnionParam
 		if len(config.Tools) > 0 && config.Tools[0].FunctionDeclarations != nil {
+			tools = slices.Grow(tools, len(config.Tools[0].FunctionDeclarations))
 			for _, funcDeclarations := range config.Tools[0].FunctionDeclarations {
 				toolUnion, err := functionDeclarationToToolParam(funcDeclarations)
 				if err != nil {
@@ -212,12 +212,6 @@ func (m *Claude) Generate(ctx context.Context, request GenerateRequest) (*Genera
 			messages = messages[1:]
 			params.Messages = messages
 		}
-	}
-
-	// Add tools if provided
-	toolDeclarations := extractFunctionDeclarations(request.Content)
-	if len(toolDeclarations) > 0 {
-		params.Tools = toolDeclarations
 	}
 
 	// Make API call
@@ -311,19 +305,37 @@ func (m *Claude) StreamGenerate(ctx context.Context, request GenerateRequest) (S
 	}
 
 	// Apply generation config if provided
-	if request.GenerationConfig != nil {
-		if request.GenerationConfig.Temperature != nil {
-			params.Temperature = anthropic.Float(float64(*request.GenerationConfig.Temperature))
-		}
-
+	if config := request.GenerationConfig; config != nil {
 		// MaxOutputTokens is an int32 directly, not a pointer
-		if request.GenerationConfig.MaxOutputTokens > 0 {
-			params.MaxTokens = int64(request.GenerationConfig.MaxOutputTokens)
+		if config.MaxOutputTokens > 0 {
+			params.MaxTokens = int64(config.MaxOutputTokens)
 		}
 
-		if request.GenerationConfig.TopP != nil {
-			params.TopP = anthropic.Float(float64(*request.GenerationConfig.TopP))
+		if config.Temperature != nil {
+			params.Temperature = anthropic.Float(float64(*config.Temperature))
 		}
+
+		if config.TopK != nil {
+			params.TopK = anthropic.Int(int64(*config.TopK))
+		}
+
+		if config.TopP != nil {
+			params.TopP = anthropic.Float(float64(*config.TopP))
+		}
+
+		// Add tools if provided
+		var tools []anthropic.ToolUnionParam
+		if len(config.Tools) > 0 && config.Tools[0].FunctionDeclarations != nil {
+			tools = slices.Grow(tools, len(config.Tools[0].FunctionDeclarations))
+			for _, funcDeclarations := range config.Tools[0].FunctionDeclarations {
+				toolUnion, err := functionDeclarationToToolParam(funcDeclarations)
+				if err != nil {
+					return nil, err
+				}
+				tools = append(tools, toolUnion)
+			}
+		}
+		params.Tools = tools
 	}
 
 	// Apply system prompt if it exists in first content
@@ -343,12 +355,6 @@ func (m *Claude) StreamGenerate(ctx context.Context, request GenerateRequest) (S
 			messages = messages[1:]
 			params.Messages = messages
 		}
-	}
-
-	// Add tools if provided
-	toolDeclarations := extractFunctionDeclarations(request.Content)
-	if len(toolDeclarations) > 0 {
-		params.Tools = toolDeclarations
 	}
 
 	// Make streaming API call - stream parameter is added by the method
@@ -492,18 +498,18 @@ func asClaudeRole(role string) anthropic.MessageParamRole {
 	return anthropic.MessageParamRoleUser
 }
 
-var claudeStopReasons = []anthropic.BetaMessageStopReason{
-	anthropic.BetaMessageStopReasonEndTurn,
-	anthropic.BetaMessageStopReasonStopSequence,
-	anthropic.BetaMessageStopReasonToolUse,
+var claudeStopReasons = []anthropic.StopReason{
+	anthropic.StopReasonEndTurn,
+	anthropic.StopReasonStopSequence,
+	anthropic.StopReasonToolUse,
 }
 
-func asclaudeToFinishReason(stopReason anthropic.BetaMessageStopReason) genai.FinishReason {
+func asclaudeToFinishReason(stopReason anthropic.StopReason) genai.FinishReason {
 	if slices.Contains(claudeStopReasons, stopReason) {
 		return genai.FinishReasonStop
 	}
 
-	if stopReason == anthropic.BetaMessageStopReasonMaxTokens {
+	if stopReason == anthropic.StopReasonMaxTokens {
 		return genai.FinishReasonMaxTokens
 	}
 
@@ -610,24 +616,4 @@ func claudeMessageToGenerateContentResponse(message anthropic.Message) *LLMRespo
 		//     ),
 		// ),
 	}
-}
-
-func functionDeclarationToToolParam(funcDeclaration *genai.FunctionDeclaration) (toolUnion anthropic.ToolUnionParam, err error) {
-	if funcDeclaration.Name == "" {
-		return toolUnion, errors.New("functionDeclaration name is empty")
-	}
-
-	inputSchemaProps := make(map[string]*genai.Schema)
-	if params := funcDeclaration.Parameters; params != nil && params.Properties != nil {
-		maps.Insert(inputSchemaProps, maps.All(params.Properties))
-	}
-	inputSchema := anthropic.ToolInputSchemaParam{
-		Type:       constant.ValueOf[constant.Object]().Default(),
-		Properties: inputSchemaProps,
-	}
-
-	toolUnion = anthropic.ToolUnionParamOfTool(inputSchema, funcDeclaration.Name)
-	toolUnion.OfTool.Description = param.NewOpt(funcDeclaration.Description)
-
-	return toolUnion, nil
 }
