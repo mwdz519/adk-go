@@ -8,11 +8,13 @@ import (
 	"errors"
 	"fmt"
 	"log"
+	"maps"
 	"os"
 	"slices"
 
 	anthropic "github.com/anthropics/anthropic-sdk-go"
 	"github.com/anthropics/anthropic-sdk-go/option"
+	"github.com/anthropics/anthropic-sdk-go/packages/param"
 	"github.com/anthropics/anthropic-sdk-go/packages/ssestream"
 	"github.com/anthropics/anthropic-sdk-go/shared/constant"
 	"github.com/bytedance/sonic"
@@ -587,4 +589,24 @@ func claudeMessageToGenerateContentResponse(message anthropic.Message) *LLMRespo
 		//     ),
 		// ),
 	}
+}
+
+func functionDeclarationToToolParam(funcDeclaration genai.FunctionDeclaration) (toolUnion anthropic.ToolUnionParam, err error) {
+	if funcDeclaration.Name == "" {
+		return toolUnion, fmt.Errorf("functionDeclaration name is empty")
+	}
+
+	inputSchemaProps := make(map[string]*genai.Schema)
+	if params := funcDeclaration.Parameters; params != nil && params.Properties != nil {
+		maps.Insert(inputSchemaProps, maps.All(params.Properties))
+	}
+	inputSchema := anthropic.ToolInputSchemaParam{
+		Type:       constant.ValueOf[constant.Object]().Default(),
+		Properties: inputSchemaProps,
+	}
+
+	toolUnion = anthropic.ToolUnionParamOfTool(inputSchema, funcDeclaration.Name)
+	toolUnion.OfTool.Description = param.NewOpt(funcDeclaration.Description)
+
+	return toolUnion, nil
 }
