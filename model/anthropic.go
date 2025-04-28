@@ -168,19 +168,31 @@ func (m *Claude) Generate(ctx context.Context, request GenerateRequest) (*Genera
 	}
 
 	// Apply generation config if provided
-	if request.GenerationConfig != nil {
-		if request.GenerationConfig.Temperature != nil {
-			params.Temperature = anthropic.Float(float64(*request.GenerationConfig.Temperature))
+	if config := request.GenerationConfig; config != nil {
+		if config.Temperature != nil {
+			params.Temperature = anthropic.Float(float64(*config.Temperature))
 		}
 
 		// MaxOutputTokens is an int32 directly, not a pointer
-		if request.GenerationConfig.MaxOutputTokens > 0 {
-			params.MaxTokens = int64(request.GenerationConfig.MaxOutputTokens)
+		if config.MaxOutputTokens > 0 {
+			params.MaxTokens = int64(config.MaxOutputTokens)
 		}
 
-		if request.GenerationConfig.TopP != nil {
-			params.TopP = anthropic.Float(float64(*request.GenerationConfig.TopP))
+		if config.TopP != nil {
+			params.TopP = anthropic.Float(float64(*config.TopP))
 		}
+
+		tools := []anthropic.ToolUnionParam{}
+		if len(config.Tools) > 0 && config.Tools[0].FunctionDeclarations != nil {
+			for _, funcDeclarations := range config.Tools[0].FunctionDeclarations {
+				toolUnion, err := functionDeclarationToToolParam(funcDeclarations)
+				if err != nil {
+					return nil, err
+				}
+				tools = append(tools, toolUnion)
+			}
+		}
+		params.Tools = tools
 	}
 
 	// Apply system prompt if it exists in first content
