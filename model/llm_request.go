@@ -62,6 +62,7 @@ type LLMRequest struct {
 	CountTokensConfig  *genai.CountTokensConfig `json:"count_tokens_config,omitempty"`
 	SystemInstructions []string                 `json:"system_instructions,omitempty"`
 	Tools              []*Tool                  `json:"tools,omitempty"`
+	ToolMap            map[string]*Tool         `json:"tool_map,omitempty"`
 	SafetySettings     []*SafetySetting         `json:"safety_settings,omitempty"`
 	OutputSchema       map[string]any           `json:"output_schema,omitempty"`
 }
