@@ -532,7 +532,7 @@ func partToClaudeMessageBlock(part *genai.Part) (anthropic.ContentBlockParamUnio
 
 		params := anthropic.ContentBlockParamOfRequestToolUseBlock(funcCall.ID, funcCall.Args, funcCall.Name)
 		params.OfRequestToolUseBlock.Type = constant.ValueOf[constant.ToolUse]().Default()
-		return anthropic.ContentBlockParamUnion{}, nil
+		return params, nil
 	}
 
 	if part.FunctionResponse != nil {
