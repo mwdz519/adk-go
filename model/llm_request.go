@@ -182,11 +182,13 @@ func (r *LLMRequest) ToGenerateRequest() *GenerateRequest {
 	}
 
 	// Convert our GenerationConfig to genai.GenerationConfig
-	var genConfig *genai.GenerationConfig
+	var genConfig *Config
 	if r.Config != nil {
-		genConfig = &genai.GenerationConfig{
-			MaxOutputTokens: int32(r.Config.MaxOutputTokens),
-			StopSequences:   r.Config.StopSequences,
+		genConfig = &Config{
+			GenerationConfig: &genai.GenerationConfig{
+				MaxOutputTokens: int32(r.Config.MaxOutputTokens),
+				StopSequences:   r.Config.StopSequences,
+			},
 		}
 
 		// Add optional fields
