@@ -64,7 +64,7 @@ func (m *Base) Connect() (BaseLLMConnection, error) {
 }
 
 // Generate generates content from the model.
-func (m *Base) Generate(ctx context.Context, request GenerateRequest) (*GenerateResponse, error) {
+func (m *Base) Generate(ctx context.Context, request *LLMRequest) (*GenerateResponse, error) {
 	return nil, fmt.Errorf("Generate not implemented for BaseLLM")
 }
 
@@ -74,7 +74,7 @@ func (m *Base) GenerateContent(ctx context.Context, contents []*genai.Content, c
 }
 
 // StreamGenerate streams generated content from the model.
-func (m *Base) StreamGenerate(ctx context.Context, request GenerateRequest) (StreamGenerateResponse, error) {
+func (m *Base) StreamGenerate(ctx context.Context, request *LLMRequest) (StreamGenerateResponse, error) {
 	return nil, fmt.Errorf("StreamGenerate not implemented for BaseLLM")
 }
 

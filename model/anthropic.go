@@ -147,10 +147,10 @@ func functionDeclarationToToolParam(funcDeclaration *genai.FunctionDeclaration) 
 }
 
 // Generate generates content from the model.
-func (m *Claude) Generate(ctx context.Context, request GenerateRequest) (*GenerateResponse, error) {
+func (m *Claude) Generate(ctx context.Context, request *LLMRequest) (*GenerateResponse, error) {
 	// Convert messages to Anthropic format
-	messages := make([]anthropic.MessageParam, len(request.Content))
-	for i, content := range request.Content {
+	messages := make([]anthropic.MessageParam, len(request.Contents))
+	for i, content := range request.Contents {
 		messages[i] = contentToClaudeMessageParam(content)
 	}
 
@@ -162,7 +162,7 @@ func (m *Claude) Generate(ctx context.Context, request GenerateRequest) (*Genera
 	}
 
 	// Apply generation config if provided
-	if config := request.GenerationConfig; config != nil {
+	if config := request.Config; config != nil {
 		// MaxOutputTokens is an int32 directly, not a pointer
 		if config.MaxOutputTokens > 0 {
 			params.MaxTokens = int64(config.MaxOutputTokens)
@@ -182,9 +182,9 @@ func (m *Claude) Generate(ctx context.Context, request GenerateRequest) (*Genera
 
 		// Add tools if provided
 		var tools []anthropic.ToolUnionParam
-		if len(config.Tools) > 0 && config.Tools[0].FunctionDeclarations != nil {
-			tools = slices.Grow(tools, len(config.Tools[0].FunctionDeclarations))
-			for _, funcDeclarations := range config.Tools[0].FunctionDeclarations {
+		if len(request.Tools) > 0 && request.Tools[0].FunctionDeclarations != nil {
+			tools = slices.Grow(tools, len(request.Tools[0].FunctionDeclarations))
+			for _, funcDeclarations := range request.Tools[0].FunctionDeclarations {
 				toolUnion, err := functionDeclarationToToolParam(funcDeclarations)
 				if err != nil {
 					return nil, err
@@ -196,7 +196,7 @@ func (m *Claude) Generate(ctx context.Context, request GenerateRequest) (*Genera
 	}
 
 	// Apply system prompt if it exists in first content
-	systemText, hasSystem := extractSystemPrompt(request.Content)
+	systemText, hasSystem := extractSystemPrompt(request.Contents)
 	if hasSystem {
 		// For System, we need to create TextBlockParam
 		var systemTextBlocks []anthropic.TextBlockParam
@@ -258,12 +258,12 @@ func anthropicMessageToGenAIContent(message *anthropic.Message) *genai.Content {
 
 // GenerateContent generates content from the model.
 func (m *Claude) GenerateContent(ctx context.Context, contents []*genai.Content, config *genai.GenerateContentConfig) (*genai.GenerateContentResponse, error) {
-	request := GenerateRequest{
-		Content: contents,
+	request := &LLMRequest{
+		Contents: contents,
 	}
 
 	if config != nil {
-		genConfig := &Config{}
+		genConfig := &genai.GenerationConfig{}
 		if config.Temperature != nil {
 			genConfig.Temperature = config.Temperature
 		}
@@ -277,7 +277,7 @@ func (m *Claude) GenerateContent(ctx context.Context, contents []*genai.Content,
 		if config.TopK != nil {
 			genConfig.TopK = config.TopK
 		}
-		request.GenerationConfig = genConfig
+		request.Config = genConfig
 		request.SafetySettings = config.SafetySettings
 	}
 
@@ -290,10 +290,10 @@ func (m *Claude) GenerateContent(ctx context.Context, contents []*genai.Content,
 }
 
 // StreamGenerate streams generated content from the model.
-func (m *Claude) StreamGenerate(ctx context.Context, request GenerateRequest) (StreamGenerateResponse, error) {
+func (m *Claude) StreamGenerate(ctx context.Context, request *LLMRequest) (StreamGenerateResponse, error) {
 	// Convert to Anthropic format
-	messages := make([]anthropic.MessageParam, len(request.Content))
-	for i, content := range request.Content {
+	messages := make([]anthropic.MessageParam, len(request.Contents))
+	for i, content := range request.Contents {
 		messages[i] = contentToClaudeMessageParam(content)
 	}
 
@@ -305,7 +305,7 @@ func (m *Claude) StreamGenerate(ctx context.Context, request GenerateRequest) (S
 	}
 
 	// Apply generation config if provided
-	if config := request.GenerationConfig; config != nil {
+	if config := request.Config; config != nil {
 		// MaxOutputTokens is an int32 directly, not a pointer
 		if config.MaxOutputTokens > 0 {
 			params.MaxTokens = int64(config.MaxOutputTokens)
@@ -325,9 +325,9 @@ func (m *Claude) StreamGenerate(ctx context.Context, request GenerateRequest) (S
 
 		// Add tools if provided
 		var tools []anthropic.ToolUnionParam
-		if len(config.Tools) > 0 && config.Tools[0].FunctionDeclarations != nil {
-			tools = slices.Grow(tools, len(config.Tools[0].FunctionDeclarations))
-			for _, funcDeclarations := range config.Tools[0].FunctionDeclarations {
+		if len(request.Tools) > 0 && request.Tools[0].FunctionDeclarations != nil {
+			tools = slices.Grow(tools, len(request.Tools[0].FunctionDeclarations))
+			for _, funcDeclarations := range request.Tools[0].FunctionDeclarations {
 				toolUnion, err := functionDeclarationToToolParam(funcDeclarations)
 				if err != nil {
 					return nil, err
@@ -339,7 +339,7 @@ func (m *Claude) StreamGenerate(ctx context.Context, request GenerateRequest) (S
 	}
 
 	// Apply system prompt if it exists in first content
-	systemText, hasSystem := extractSystemPrompt(request.Content)
+	systemText, hasSystem := extractSystemPrompt(request.Contents)
 	if hasSystem {
 		// For System, we need to create TextBlockParam
 		var systemTextBlocks []anthropic.TextBlockParam
@@ -368,12 +368,12 @@ func (m *Claude) StreamGenerate(ctx context.Context, request GenerateRequest) (S
 
 // StreamGenerateContent streams generated content from the model.
 func (m *Claude) StreamGenerateContent(ctx context.Context, contents []*genai.Content, config *genai.GenerateContentConfig) (StreamGenerateResponse, error) {
-	request := GenerateRequest{
-		Content: contents,
+	request := &LLMRequest{
+		Contents: contents,
 	}
 
 	if config != nil {
-		genConfig := &Config{}
+		genConfig := &genai.GenerationConfig{}
 		if config.Temperature != nil {
 			genConfig.Temperature = config.Temperature
 		}
@@ -387,7 +387,7 @@ func (m *Claude) StreamGenerateContent(ctx context.Context, contents []*genai.Co
 		if config.TopK != nil {
 			genConfig.TopK = config.TopK
 		}
-		request.GenerationConfig = genConfig
+		request.Config = genConfig
 		request.SafetySettings = config.SafetySettings
 	}
 

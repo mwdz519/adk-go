@@ -99,7 +99,7 @@ func (m *Gemini) maybeAppendUserContent(contents []*genai.Content) []*genai.Cont
 }
 
 // Generate generates content from the model.
-func (m *Gemini) Generate(ctx context.Context, request GenerateRequest) (*GenerateResponse, error) {
+func (m *Gemini) Generate(ctx context.Context, request *LLMRequest) (*GenerateResponse, error) {
 	// Get access to the Models service
 	models := m.genAIClient.Models
 
@@ -107,11 +107,11 @@ func (m *Gemini) Generate(ctx context.Context, request GenerateRequest) (*Genera
 	config := &genai.GenerateContentConfig{}
 
 	// Apply generation config if provided
-	if request.GenerationConfig != nil {
-		config.Temperature = request.GenerationConfig.Temperature
-		config.MaxOutputTokens = request.GenerationConfig.MaxOutputTokens
-		config.TopP = request.GenerationConfig.TopP
-		config.TopK = request.GenerationConfig.TopK
+	if request.Config != nil {
+		config.Temperature = request.Config.Temperature
+		config.MaxOutputTokens = request.Config.MaxOutputTokens
+		config.TopP = request.Config.TopP
+		config.TopK = request.Config.TopK
 	}
 
 	// Apply safety settings if provided
@@ -120,7 +120,7 @@ func (m *Gemini) Generate(ctx context.Context, request GenerateRequest) (*Genera
 	}
 
 	// Ensure the last message is from the user
-	contents := m.maybeAppendUserContent(request.Content)
+	contents := m.maybeAppendUserContent(request.Contents)
 
 	// Generate content
 	resp, err := models.GenerateContent(ctx, m.model, contents, config)
@@ -157,7 +157,7 @@ func (m *Gemini) GenerateContent(ctx context.Context, contents []*genai.Content,
 }
 
 // StreamGenerate streams generated content from the model.
-func (m *Gemini) StreamGenerate(ctx context.Context, request GenerateRequest) (StreamGenerateResponse, error) {
+func (m *Gemini) StreamGenerate(ctx context.Context, request *LLMRequest) (StreamGenerateResponse, error) {
 	// Get access to the Models service
 	models := m.genAIClient.Models
 
@@ -165,11 +165,11 @@ func (m *Gemini) StreamGenerate(ctx context.Context, request GenerateRequest) (S
 	config := &genai.GenerateContentConfig{}
 
 	// Apply generation config if provided
-	if request.GenerationConfig != nil {
-		config.Temperature = request.GenerationConfig.Temperature
-		config.MaxOutputTokens = request.GenerationConfig.MaxOutputTokens
-		config.TopP = request.GenerationConfig.TopP
-		config.TopK = request.GenerationConfig.TopK
+	if request.Config != nil {
+		config.Temperature = request.Config.Temperature
+		config.MaxOutputTokens = request.Config.MaxOutputTokens
+		config.TopP = request.Config.TopP
+		config.TopK = request.Config.TopK
 	}
 
 	// Apply safety settings if provided
@@ -178,7 +178,7 @@ func (m *Gemini) StreamGenerate(ctx context.Context, request GenerateRequest) (S
 	}
 
 	// Ensure the last message is from the user
-	contents := m.maybeAppendUserContent(request.Content)
+	contents := m.maybeAppendUserContent(request.Contents)
 
 	// Stream generate content
 	stream := models.GenerateContentStream(ctx, m.model, contents, config)

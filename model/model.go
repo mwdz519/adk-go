@@ -35,7 +35,7 @@ type Model interface {
 	Connect() (BaseLLMConnection, error)
 
 	// Generate generates content from the model.
-	Generate(ctx context.Context, request GenerateRequest) (*GenerateResponse, error)
+	Generate(ctx context.Context, request *LLMRequest) (*GenerateResponse, error)
 
 	// GenerateContent generates content from the model.
 	GenerateContent(ctx context.Context, contents []*genai.Content, config *genai.GenerateContentConfig) (*genai.GenerateContentResponse, error)
@@ -72,7 +72,7 @@ type GenerativeModel interface {
 	Model
 
 	// StreamGenerate streams generated content from the model.
-	StreamGenerate(ctx context.Context, request GenerateRequest) (StreamGenerateResponse, error)
+	StreamGenerate(ctx context.Context, request *LLMRequest) (StreamGenerateResponse, error)
 
 	// StreamGenerateContent streams generated content from the model.
 	StreamGenerateContent(ctx context.Context, contents []*genai.Content, config *genai.GenerateContentConfig) (StreamGenerateResponse, error)
@@ -119,7 +119,7 @@ func (m *BaseGenerativeModel) WithSafetySettings(settings []*genai.SafetySetting
 }
 
 // Generate generates content from the model.
-func (m *BaseGenerativeModel) Generate(ctx context.Context, request GenerateRequest) (*GenerateResponse, error) {
+func (m *BaseGenerativeModel) Generate(ctx context.Context, request *LLMRequest) (*GenerateResponse, error) {
 	return m.Base.Generate(ctx, request)
 }
 
@@ -129,7 +129,7 @@ func (m *BaseGenerativeModel) GenerateContent(ctx context.Context, contents []*g
 }
 
 // StreamGenerate streams generated content from the model.
-func (m *BaseGenerativeModel) StreamGenerate(ctx context.Context, request GenerateRequest) (StreamGenerateResponse, error) {
+func (m *BaseGenerativeModel) StreamGenerate(ctx context.Context, request *LLMRequest) (StreamGenerateResponse, error) {
 	return m.Base.StreamGenerate(ctx, request)
 }
 
