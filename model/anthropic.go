@@ -504,7 +504,7 @@ var claudeStopReasons = []anthropic.StopReason{
 	anthropic.StopReasonToolUse,
 }
 
-func asclaudeToFinishReason(stopReason anthropic.StopReason) genai.FinishReason {
+func asClaudeToFinishReason(stopReason anthropic.StopReason) genai.FinishReason {
 	if slices.Contains(claudeStopReasons, stopReason) {
 		return genai.FinishReasonStop
 	}
