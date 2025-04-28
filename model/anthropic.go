@@ -138,8 +138,8 @@ func extractFunctionDeclarations(contents []*genai.Content) []anthropic.ToolUnio
 		for _, part := range content.Parts {
 			if part != nil && part.FunctionCall != nil {
 				toolSchema := anthropic.ToolInputSchemaParam{
-					Type:       "object",
-					Properties: make(map[string]any),
+					Type:       constant.ValueOf[constant.Object]().Default(),
+					Properties: part,
 				}
 
 				// Create a tool from function
