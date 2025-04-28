@@ -139,7 +139,7 @@ func (c *GeminiLLMConnection) processStream(_ context.Context, stream iter.Seq2[
 		}
 
 		// Convert genai response to LLMResponse
-		llmResp := Create(resp)
+		llmResp := CreateLLMResponse(resp)
 
 		// Mark as partial (not the end of the stream)
 		llmResp.WithPartial(true)
@@ -153,7 +153,7 @@ func (c *GeminiLLMConnection) processStream(_ context.Context, stream iter.Seq2[
 	}
 
 	// Send a final response with TurnComplete set to true
-	finalResp := NewLLMResponse()
+	finalResp := &LLMResponse{}
 	finalResp.WithTurnComplete(true)
 	finalResp.WithPartial(false)
 
@@ -166,7 +166,7 @@ func (c *GeminiLLMConnection) processStream(_ context.Context, stream iter.Seq2[
 
 // sendErrorResponse sends an error response through the channel.
 func (c *GeminiLLMConnection) sendErrorResponse(err error) {
-	resp := NewLLMResponse()
+	resp := &LLMResponse{}
 	resp.ErrorCode = "GENERATION_ERROR"
 	resp.ErrorMessage = err.Error()
 

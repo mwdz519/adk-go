@@ -41,12 +41,7 @@ type LLMResponse struct {
 	CustomMetadata map[string]any
 }
 
-// NewLLMResponse creates a new empty LLMResponse.
-func NewLLMResponse() *LLMResponse {
-	return &LLMResponse{}
-}
-
-// Create creates an LLMResponse from a GenerateContentResponse.
+// CreateLLMResponse creates an LLMResponse from a GenerateContentResponse.
 // This is the Go equivalent of the Python create() static method.
 //
 // Parameters:
@@ -54,8 +49,8 @@ func NewLLMResponse() *LLMResponse {
 //
 // Returns:
 //   - The LLMResponse.
-func Create(resp *genai.GenerateContentResponse) *LLMResponse {
-	response := NewLLMResponse()
+func CreateLLMResponse(resp *genai.GenerateContentResponse) *LLMResponse {
+	response := &LLMResponse{}
 
 	if resp == nil {
 		response.ErrorCode = "UNKNOWN_ERROR"
@@ -110,7 +105,7 @@ func Create(resp *genai.GenerateContentResponse) *LLMResponse {
 // Returns:
 //   - The LLMResponse.
 func CreateFromGenerateContentResponse(generateContentResponse *genai.GenerateContentResponse) *LLMResponse {
-	return Create(generateContentResponse)
+	return CreateLLMResponse(generateContentResponse)
 }
 
 // WithPartial sets the partial flag and returns the response.

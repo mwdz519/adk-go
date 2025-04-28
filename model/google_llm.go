@@ -99,7 +99,7 @@ func (m *Gemini) maybeAppendUserContent(contents []*genai.Content) []*genai.Cont
 }
 
 // Generate generates content from the model.
-func (m *Gemini) Generate(ctx context.Context, request *LLMRequest) (*GenerateResponse, error) {
+func (m *Gemini) Generate(ctx context.Context, request *LLMRequest) (*LLMResponse, error) {
 	// Get access to the Models service
 	models := m.genAIClient.Models
 
@@ -128,13 +128,11 @@ func (m *Gemini) Generate(ctx context.Context, request *LLMRequest) (*GenerateRe
 		return nil, fmt.Errorf("gemini API error: %w", err)
 	}
 
-	return &GenerateResponse{
-		Content: resp,
-	}, nil
+	return CreateLLMResponse(resp), nil
 }
 
 // GenerateContent generates content from the model.
-func (m *Gemini) GenerateContent(ctx context.Context, contents []*genai.Content, config *genai.GenerateContentConfig) (*genai.GenerateContentResponse, error) {
+func (m *Gemini) GenerateContent(ctx context.Context, contents []*genai.Content, config *genai.GenerateContentConfig) (*LLMResponse, error) {
 	// Get access to the Models service
 	models := m.genAIClient.Models
 
@@ -153,7 +151,9 @@ func (m *Gemini) GenerateContent(ctx context.Context, contents []*genai.Content,
 	contents = m.maybeAppendUserContent(contents)
 
 	// Generate content
-	return models.GenerateContent(ctx, m.model, contents, genConfig)
+	resp, err := models.GenerateContent(ctx, m.model, contents, genConfig)
+
+	return CreateLLMResponse(resp), err
 }
 
 // StreamGenerate streams generated content from the model.

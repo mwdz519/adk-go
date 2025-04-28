@@ -35,10 +35,10 @@ type Model interface {
 	Connect() (BaseLLMConnection, error)
 
 	// Generate generates content from the model.
-	Generate(ctx context.Context, request *LLMRequest) (*GenerateResponse, error)
+	Generate(ctx context.Context, request *LLMRequest) (*LLMResponse, error)
 
 	// GenerateContent generates content from the model.
-	GenerateContent(ctx context.Context, contents []*genai.Content, config *genai.GenerateContentConfig) (*genai.GenerateContentResponse, error)
+	GenerateContent(ctx context.Context, contents []*genai.Content, config *genai.GenerateContentConfig) (*LLMResponse, error)
 }
 
 // GenerateResponse represents a response from generating content.
@@ -99,12 +99,12 @@ func (m *BaseGenerativeModel) WithSafetySettings(settings []*genai.SafetySetting
 }
 
 // Generate generates content from the model.
-func (m *BaseGenerativeModel) Generate(ctx context.Context, request *LLMRequest) (*GenerateResponse, error) {
+func (m *BaseGenerativeModel) Generate(ctx context.Context, request *LLMRequest) (*LLMResponse, error) {
 	return m.Base.Generate(ctx, request)
 }
 
 // GenerateContent generates content from the model.
-func (m *BaseGenerativeModel) GenerateContent(ctx context.Context, contents []*genai.Content, config *genai.GenerateContentConfig) (*genai.GenerateContentResponse, error) {
+func (m *BaseGenerativeModel) GenerateContent(ctx context.Context, contents []*genai.Content, config *genai.GenerateContentConfig) (*LLMResponse, error) {
 	return m.Base.GenerateContent(ctx, contents, config)
 }
 

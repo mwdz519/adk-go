@@ -64,12 +64,12 @@ func (m *Base) Connect() (BaseLLMConnection, error) {
 }
 
 // Generate generates content from the model.
-func (m *Base) Generate(ctx context.Context, request *LLMRequest) (*GenerateResponse, error) {
+func (m *Base) Generate(ctx context.Context, request *LLMRequest) (*LLMResponse, error) {
 	return nil, fmt.Errorf("Generate not implemented for BaseLLM")
 }
 
 // GenerateContent generates content from the model.
-func (m *Base) GenerateContent(ctx context.Context, contents []*genai.Content, config *genai.GenerateContentConfig) (*genai.GenerateContentResponse, error) {
+func (m *Base) GenerateContent(ctx context.Context, contents []*genai.Content, config *genai.GenerateContentConfig) (*LLMResponse, error) {
 	return nil, fmt.Errorf("GenerateContent not implemented for BaseLLM")
 }
 

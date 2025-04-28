@@ -147,7 +147,7 @@ func functionDeclarationToToolParam(funcDeclaration *genai.FunctionDeclaration) 
 }
 
 // Generate generates content from the model.
-func (m *Claude) Generate(ctx context.Context, request *LLMRequest) (*GenerateResponse, error) {
+func (m *Claude) Generate(ctx context.Context, request *LLMRequest) (*LLMResponse, error) {
 	// Convert messages to Anthropic format
 	messages := make([]anthropic.MessageParam, len(request.Contents))
 	for i, content := range request.Contents {
@@ -220,21 +220,7 @@ func (m *Claude) Generate(ctx context.Context, request *LLMRequest) (*GenerateRe
 		return nil, fmt.Errorf("claude API error: %w", err)
 	}
 
-	// Convert response to GenAI format
-	content := anthropicMessageToGenAIContent(message)
-
-	// Create response
-	response := &genai.GenerateContentResponse{
-		Candidates: []*genai.Candidate{
-			{
-				Content: content,
-			},
-		},
-	}
-
-	return &GenerateResponse{
-		Content: response,
-	}, nil
+	return claudeMessageToGenerateContentResponse(message), nil
 }
 
 // anthropicMessageToGenAIContent converts an Anthropic message to GenAI content
@@ -257,7 +243,7 @@ func anthropicMessageToGenAIContent(message *anthropic.Message) *genai.Content {
 }
 
 // GenerateContent generates content from the model.
-func (m *Claude) GenerateContent(ctx context.Context, contents []*genai.Content, config *genai.GenerateContentConfig) (*genai.GenerateContentResponse, error) {
+func (m *Claude) GenerateContent(ctx context.Context, contents []*genai.Content, config *genai.GenerateContentConfig) (*LLMResponse, error) {
 	request := &LLMRequest{
 		Contents: contents,
 	}
@@ -286,7 +272,7 @@ func (m *Claude) GenerateContent(ctx context.Context, contents []*genai.Content,
 		return nil, err
 	}
 
-	return resp.Content, nil
+	return resp, nil
 }
 
 // StreamGenerate streams generated content from the model.
@@ -591,7 +577,7 @@ func claudeContentBlockToPart(contentBlock anthropic.ContentBlockUnion) (*genai.
 	return nil, fmt.Errorf("unreachable: no variant present")
 }
 
-func claudeMessageToGenerateContentResponse(message anthropic.Message) *LLMResponse {
+func claudeMessageToGenerateContentResponse(message *anthropic.Message) *LLMResponse {
 	parts := make([]*genai.Part, 0, len(message.Content))
 	for _, mcontent := range message.Content {
 		part, err := claudeContentBlockToPart(mcontent)
