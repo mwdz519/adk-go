@@ -69,14 +69,6 @@ func NewClaude(ctx context.Context, apiKey string, modelName string) (*Claude, e
 // SupportedModels returns a list of supported Claude models.
 func (m *Claude) SupportedModels() []string {
 	return []string{
-		// GCP Vertex AI
-		"claude-3-7-sonnet@20250219",
-		"claude-3-5-haiku@20241022",
-		"claude-3-5-sonnet-v2@20241022",
-		"claude-3-opus@20240229",
-		"claude-3-sonnet@20240229",
-		"claude-3-haiku@20240307",
-
 		// Anthropic API
 		anthropic.ModelClaude3_7SonnetLatest,
 		anthropic.ModelClaude3_7Sonnet20250219,
@@ -87,6 +79,23 @@ func (m *Claude) SupportedModels() []string {
 		anthropic.ModelClaude_3_5_Sonnet_20240620,
 		anthropic.ModelClaude3OpusLatest,
 		anthropic.ModelClaude_3_Opus_20240229,
+
+		// GCP Vertex AI
+		"claude-3-7-sonnet@20250219",
+		"claude-3-5-haiku@20241022",
+		"claude-3-5-sonnet-v2@20241022",
+		"claude-3-opus@20240229",
+		"claude-3-sonnet@20240229",
+		"claude-3-haiku@20240307",
+
+		// AWS Bedrock
+		"anthropic.claude-3-7-sonnet-20250219-v1:0",
+		"anthropic.claude-3-5-haiku-20241022-v1:0",
+		"anthropic.claude-3-5-sonnet-20241022-v2:0",
+		"anthropic.claude-3-5-sonnet-20240620-v1:0",
+		"anthropic.claude-3-opus-20240229-v1:0",
+		"anthropic.claude-3-sonnet-20240229-v1:0",
+		"anthropic.claude-3-haiku-20240307-v1:0",
 	}
 }
 
