@@ -28,7 +28,6 @@ type Gemini struct {
 
 	genAIClient     *genai.Client
 	trackingHeaders map[string]string
-	logger          *slog.Logger
 }
 
 var _ GenerativeModel = (*Gemini)(nil)
@@ -61,7 +60,6 @@ func NewGemini(ctx context.Context, apiKey string, modelName string) (*Gemini, e
 		Base:            NewBase(modelName),
 		genAIClient:     genAIClient,
 		trackingHeaders: make(map[string]string),
-		logger:          slog.Default(),
 	}, nil
 }
 
@@ -103,10 +101,10 @@ func (m *Gemini) SupportedModels() []string {
 }
 
 // Connect creates a live connection to the Gemini LLM.
-func (m *Gemini) Connect() (BaseLLMConnection, error) {
+func (m *Gemini) Connect() (BaseConnection, error) {
 	// Ensure we have an API client
 	// Create and return a new connection
-	return newGeminiLLMConnection(m.model, m.genAIClient), nil
+	return newGeminiConnection(m.model, m.genAIClient), nil
 }
 
 // appendUserContent checks if the last message is from the user and if not, appends an empty user message.
