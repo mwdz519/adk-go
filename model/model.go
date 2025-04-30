@@ -57,12 +57,6 @@ type GenerativeModel interface {
 
 	// StreamGenerateContent streams generated content from the model.
 	StreamGenerateContent(ctx context.Context, contents []*genai.Content, config *genai.GenerateContentConfig) iter.Seq2[*LLMResponse, error]
-
-	// WithGenerationConfig returns a new model with the specified generation config.
-	WithGenerationConfig(config *genai.GenerationConfig) GenerativeModel
-
-	// WithSafetySettings returns a new model with the specified safety settings.
-	WithSafetySettings(settings []*genai.SafetySetting) GenerativeModel
 }
 
 // StreamGenerateResponse represents a stream of generated content.
