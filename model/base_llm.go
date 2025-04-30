@@ -8,6 +8,7 @@ import (
 	"errors"
 	"fmt"
 	"iter"
+	"log/slog"
 
 	"google.golang.org/genai"
 )
@@ -23,6 +24,8 @@ type Base struct {
 
 	// SafetySettings contains safety settings for content generation.
 	safetySettings []*genai.SafetySetting
+
+	logger *slog.Logger
 }
 
 var _ Model = (*Base)(nil)
@@ -30,7 +33,8 @@ var _ Model = (*Base)(nil)
 // NewBase creates a new [Base] instance.
 func NewBase(model string) *Base {
 	return &Base{
-		model: model,
+		model:  model,
+		logger: slog.Default(),
 	}
 }
 
