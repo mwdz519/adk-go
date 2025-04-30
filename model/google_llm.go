@@ -264,65 +264,23 @@ func (m *Gemini) StreamGenerate(ctx context.Context, request *LLMRequest) iter.S
 
 // StreamGenerateContent streams generated content from the model.
 func (m *Gemini) StreamGenerateContent(ctx context.Context, contents []*genai.Content, config *genai.GenerateContentConfig) iter.Seq2[*LLMResponse, error] {
-	return func(yield func(*LLMResponse, error) bool) {
-		// Create generate content config
-		genConfig := &genai.GenerateContentConfig{}
-
-		// Apply generation config if provided
-		if config != nil {
-			genConfig.MaxOutputTokens = config.MaxOutputTokens
-			genConfig.Temperature = config.Temperature
-			genConfig.TopP = config.TopP
-			genConfig.TopK = config.TopK
-		}
-
-		// Ensure the last message is from the user
-		contents = m.appendUserContent(contents)
-
-		// Stream generate content
-		stream := m.genAIClient.Models.GenerateContentStream(ctx, m.model, contents, genConfig)
-
-		var (
-			buf      strings.Builder
-			lastResp *genai.GenerateContentResponse
-		)
-		for resp, err := range stream {
-			// catch error first
-			if err != nil {
-				if !yield(nil, err) {
-					return
-				}
-				continue
-			}
-
-			if ctx.Err() != nil || resp == nil {
-				return
-			}
-
-			lastResp = resp
-			llmResp := CreateLLMResponse(resp)
-
-			switch {
-			case containsText(llmResp):
-				buf.WriteString(llmResp.Content.Parts[0].Text)
-				llmResp.WithPartial(true)
-
-			case buf.Len() > 0 && !isAudio(llmResp):
-				if !yield(newAggregateText(buf.String()), nil) {
-					return
-				}
-				buf.Reset()
-			}
-
-			if !yield(llmResp, nil) {
-				return
-			}
-		}
-
-		if buf.Len() > 0 && lastResp != nil && finishStop(lastResp) {
-			yield(newAggregateText(buf.String()), nil)
-		}
+	request := &LLMRequest{
+		Contents: m.appendUserContent(contents),
 	}
+
+	// Apply generation config if provided
+	if config != nil {
+		genConfig := &genai.GenerationConfig{}
+		genConfig.Temperature = config.Temperature
+		genConfig.MaxOutputTokens = config.MaxOutputTokens
+		genConfig.TopP = config.TopP
+		genConfig.TopK = config.TopK
+
+		request.Config = genConfig
+		request.SafetySettings = config.SafetySettings
+	}
+
+	return m.StreamGenerate(ctx, request)
 }
 
 // geminiStreamResponse implements [StreamGenerateResponse] for [Gemini].
