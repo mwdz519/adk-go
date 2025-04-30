@@ -41,14 +41,7 @@ type LLMResponse struct {
 	CustomMetadata map[string]any
 }
 
-// CreateLLMResponse creates an LLMResponse from a GenerateContentResponse.
-// This is the Go equivalent of the Python create() static method.
-//
-// Parameters:
-//   - resp: The GenerateContentResponse to create the LLMResponse from.
-//
-// Returns:
-//   - The LLMResponse.
+// CreateLLMResponse creates an [LLMResponse] from a [*genai.GenerateContentResponse].
 func CreateLLMResponse(resp *genai.GenerateContentResponse) *LLMResponse {
 	response := &LLMResponse{}
 
@@ -58,7 +51,8 @@ func CreateLLMResponse(resp *genai.GenerateContentResponse) *LLMResponse {
 		return response
 	}
 
-	if len(resp.Candidates) > 0 {
+	switch {
+	case len(resp.Candidates) > 0:
 		candidate := resp.Candidates[0]
 		if candidate.Content != nil && len(candidate.Content.Parts) > 0 {
 			response.Content = candidate.Content
@@ -67,7 +61,8 @@ func CreateLLMResponse(resp *genai.GenerateContentResponse) *LLMResponse {
 			response.ErrorCode = string(candidate.FinishReason)
 			response.ErrorMessage = candidate.FinishMessage
 		}
-	} else if resp.PromptFeedback != nil {
+
+	case resp.PromptFeedback != nil:
 		promptFeedback := resp.PromptFeedback
 
 		// Handle safety ratings if available
@@ -88,7 +83,8 @@ func CreateLLMResponse(resp *genai.GenerateContentResponse) *LLMResponse {
 
 		response.ErrorCode = blockReason
 		response.ErrorMessage = blockMessage
-	} else {
+
+	default:
 		response.ErrorCode = "UNKNOWN_ERROR"
 		response.ErrorMessage = "Unknown error in generate content response."
 	}
