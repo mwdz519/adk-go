@@ -21,6 +21,8 @@ type LLMResponse struct {
 	// Only used for streaming mode and when the content is plain text.
 	Partial bool
 
+	FinishReason genai.FinishReason
+
 	// TurnComplete indicates whether the response from the model is complete.
 	// Only used for streaming mode.
 	TurnComplete bool
@@ -34,6 +36,8 @@ type LLMResponse struct {
 	// Interrupted indicates that LLM was interrupted when generating the content.
 	// Usually it's due to user interruption during a bidirectional streaming.
 	Interrupted bool
+
+	UsageMetadata *genai.GenerateContentResponseUsageMetadata
 
 	// CustomMetadata is the custom metadata of the LLMResponse.
 	// An optional key-value pair to label an LLMResponse.
