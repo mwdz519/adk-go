@@ -63,11 +63,17 @@ func NewGemini(ctx context.Context, apiKey string, modelName string) (*Gemini, e
 }
 
 // SupportedModels returns a list of supported Gemini models.
+//
+// See https://ai.google.dev/gemini-api/docs/models.
 func (m *Gemini) SupportedModels() []string {
 	return []string{
-		"gemini-1.0-pro",
+		"gemini-2.5-flash-preview-04-17",
+		"gemini-2.5-pro-preview-03-25",
+		"gemini-2.0-flash",
+		"gemini-2.0-flash-lite",
+		"gemini-1.5-flash,",
+		"gemini-1.5-flash-8b",
 		"gemini-1.5-pro",
-		"gemini-1.5-flash",
 	}
 }
 
