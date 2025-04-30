@@ -7,6 +7,7 @@ import (
 	"context"
 	"fmt"
 	"iter"
+	"log/slog"
 	"os"
 	"strings"
 
@@ -27,6 +28,7 @@ type Gemini struct {
 
 	genAIClient     *genai.Client
 	trackingHeaders map[string]string
+	logger          *slog.Logger
 }
 
 var _ GenerativeModel = (*Gemini)(nil)
@@ -59,7 +61,30 @@ func NewGemini(ctx context.Context, apiKey string, modelName string) (*Gemini, e
 		Base:            NewBase(modelName),
 		genAIClient:     genAIClient,
 		trackingHeaders: make(map[string]string),
+		logger:          slog.Default(),
 	}, nil
+}
+
+// WithGenerationConfig returns a new model with the specified generation config.
+func (m *Gemini) WithGenerationConfig(config *genai.GenerationConfig) GenerativeModel {
+	// Create a new instance to avoid modifying the original
+	clone := &Gemini{
+		Base:            m.Base.WithGenerationConfig(config),
+		genAIClient:     m.genAIClient,
+		trackingHeaders: m.trackingHeaders,
+	}
+	return clone
+}
+
+// WithSafetySettings returns a new model with the specified safety settings.
+func (m *Gemini) WithSafetySettings(settings []*genai.SafetySetting) GenerativeModel {
+	// Create a new instance to avoid modifying the original
+	clone := &Gemini{
+		Base:            m.Base.WithSafetySettings(settings),
+		genAIClient:     m.genAIClient,
+		trackingHeaders: m.trackingHeaders,
+	}
+	return clone
 }
 
 // SupportedModels returns a list of supported Gemini models.
@@ -110,8 +135,8 @@ func (m *Gemini) appendUserContent(contents []*genai.Content) []*genai.Content {
 
 // Generate generates content from the model.
 func (m *Gemini) Generate(ctx context.Context, request *LLMRequest) (*LLMResponse, error) {
-	// Get access to the Models service
-	models := m.genAIClient.Models
+	// Ensure the last message is from the user
+	request.Contents = m.appendUserContent(request.Contents)
 
 	// Create config for generate content
 	config := &genai.GenerateContentConfig{}
@@ -125,30 +150,32 @@ func (m *Gemini) Generate(ctx context.Context, request *LLMRequest) (*LLMRespons
 	}
 
 	// Apply safety settings if provided
-	if request.SafetySettings != nil && len(request.SafetySettings) > 0 {
+	if len(request.SafetySettings) > 0 {
 		config.SafetySettings = request.SafetySettings
 	}
 
-	// Ensure the last message is from the user
-	contents := m.maybeAppendUserContent(request.Contents)
+	// Apply tool if provided
+	if len(request.Tools) > 0 {
+		config.Tools = request.Tools
+	}
 
 	// Generate content
-	resp, err := models.GenerateContent(ctx, m.model, contents, config)
+	response, err := m.genAIClient.Models.GenerateContent(ctx, m.model, request.Contents, config)
 	if err != nil {
 		return nil, fmt.Errorf("gemini API error: %w", err)
 	}
+	m.logger.DebugContext(ctx, "response", buildResponseLog(response))
 
-	return CreateLLMResponse(resp), nil
+	return CreateLLMResponse(response), nil
 }
 
 // GenerateContent generates content from the model.
 func (m *Gemini) GenerateContent(ctx context.Context, contents []*genai.Content, config *genai.GenerateContentConfig) (*LLMResponse, error) {
-	// Get access to the Models service
-	models := m.genAIClient.Models
+	// Ensure the last message is from the user
+	contents = m.appendUserContent(contents)
 
 	// Create generate content config
-	genConfig := &genai.GenerateContentConfig{}
-
+	genConfig := &genai.GenerationConfig{}
 	// Apply generation config if provided
 	if config != nil {
 		genConfig.MaxOutputTokens = config.MaxOutputTokens
@@ -157,13 +184,12 @@ func (m *Gemini) GenerateContent(ctx context.Context, contents []*genai.Content,
 		genConfig.TopK = config.TopK
 	}
 
-	// Ensure the last message is from the user
-	contents = m.maybeAppendUserContent(contents)
+	request := &LLMRequest{
+		Contents: contents,
+		Config:   genConfig,
+	}
 
-	// Generate content
-	resp, err := models.GenerateContent(ctx, m.model, contents, genConfig)
-
-	return CreateLLMResponse(resp), err
+	return m.Generate(ctx, request)
 }
 
 // StreamGenerate streams generated content from the model.
@@ -188,7 +214,7 @@ func (m *Gemini) StreamGenerate(ctx context.Context, request *LLMRequest) (Strea
 	}
 
 	// Ensure the last message is from the user
-	contents := m.maybeAppendUserContent(request.Contents)
+	contents := m.appendUserContent(request.Contents)
 
 	// Stream generate content
 	stream := models.GenerateContentStream(ctx, m.model, contents, config)
@@ -215,7 +241,7 @@ func (m *Gemini) StreamGenerateContent(ctx context.Context, contents []*genai.Co
 	}
 
 	// Ensure the last message is from the user
-	contents = m.maybeAppendUserContent(contents)
+	contents = m.appendUserContent(contents)
 
 	// Stream generate content
 	stream := models.GenerateContentStream(ctx, m.model, contents, genConfig)
@@ -225,35 +251,11 @@ func (m *Gemini) StreamGenerateContent(ctx context.Context, contents []*genai.Co
 	}, nil
 }
 
-// WithGenerationConfig returns a new model with the specified generation config.
-func (m *Gemini) WithGenerationConfig(config *genai.GenerationConfig) GenerativeModel {
-	// Create a new instance to avoid modifying the original
-	clone := &Gemini{
-		Base:            m.Base.WithGenerationConfig(config),
-		genAIClient:     m.genAIClient,
-		trackingHeaders: m.trackingHeaders,
-	}
-	return clone
-}
-
-// WithSafetySettings returns a new model with the specified safety settings.
-func (m *Gemini) WithSafetySettings(settings []*genai.SafetySetting) GenerativeModel {
-	// Create a new instance to avoid modifying the original
-	clone := &Gemini{
-		Base:            m.Base.WithSafetySettings(settings),
-		genAIClient:     m.genAIClient,
-		trackingHeaders: m.trackingHeaders,
-	}
-	return clone
-}
-
 // geminiStreamResponse implements [StreamGenerateResponse] for [Gemini].
 type geminiStreamResponse struct {
 	stream    iter.Seq2[*genai.GenerateContentResponse, error]
 	streamIdx int
 }
-
-var _ StreamGenerateResponse = (*geminiStreamResponse)(nil)
 
 // Next returns the next response in the stream.
 func (s *geminiStreamResponse) Next() (*genai.GenerateContentResponse, error) {
@@ -265,4 +267,25 @@ func (s *geminiStreamResponse) Next() (*genai.GenerateContentResponse, error) {
 
 	// If the iterator is empty, return nil
 	return nil, nil
+}
+
+const repponseLogFmt = `
+LLM Response:
+-----------------------------------------------------------
+Text:
+%s
+-----------------------------------------------------------
+Function calls:
+%s
+-----------------------------------------------------------
+`
+
+func buildResponseLog(resp *genai.GenerateContentResponse) slog.Attr {
+	functionCalls := resp.FunctionCalls()
+	functionCallsText := make([]string, len(functionCalls))
+	for i, funcCall := range functionCalls {
+		functionCallsText[i] = fmt.Sprintf("name: %s, args: %s", funcCall.Name, funcCall.Args)
+	}
+
+	return slog.String("response", fmt.Sprintf(repponseLogFmt, resp.Text(), strings.Join(functionCallsText, "\n")))
 }
