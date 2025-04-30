@@ -84,24 +84,28 @@ func (m *Gemini) Connect() (BaseLLMConnection, error) {
 	return newGeminiLLMConnection(m.model, m.genAIClient), nil
 }
 
-// maybeAppendUserContent checks if the last message is from the user and if not, appends an empty user message.
-func (m *Gemini) maybeAppendUserContent(contents []*genai.Content) []*genai.Content {
-	if len(contents) == 0 {
-		return []*genai.Content{{
-			Role:  "user",
-			Parts: []*genai.Part{},
-		}}
-	}
-
-	lastContent := contents[len(contents)-1]
-	if strings.ToLower(lastContent.Role) != "user" {
+// appendUserContent checks if the last message is from the user and if not, appends an empty user message.
+func (m *Gemini) appendUserContent(contents []*genai.Content) []*genai.Content {
+	switch {
+	case len(contents) == 0:
 		return append(contents, &genai.Content{
-			Role:  "user",
-			Parts: []*genai.Part{},
+			Role: genai.RoleUser,
+			Parts: []*genai.Part{
+				genai.NewPartFromText(`Handle the requests as specified in the System Instruction.`),
+			},
 		})
-	}
 
-	return contents
+	case strings.ToLower(contents[len(contents)-1].Role) != genai.RoleUser:
+		return append(contents, &genai.Content{
+			Role: genai.RoleUser,
+			Parts: []*genai.Part{
+				genai.NewPartFromText(`Continue processing previous requests as instructed. Exit or provide a summary if no more outputs are needed.`),
+			},
+		})
+
+	default:
+		return contents
+	}
 }
 
 // Generate generates content from the model.
