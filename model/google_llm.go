@@ -230,7 +230,6 @@ func (m *Gemini) StreamGenerate(ctx context.Context, request *LLMRequest) iter.S
 				if !yield(nil, err) {
 					return
 				}
-				continue
 			}
 
 			if ctx.Err() != nil || resp == nil {
@@ -243,7 +242,7 @@ func (m *Gemini) StreamGenerate(ctx context.Context, request *LLMRequest) iter.S
 			switch {
 			case containsText(llmResp):
 				buf.WriteString(llmResp.Content.Parts[0].Text)
-				llmResp.Partial = true
+				llmResp.WithPartial(true)
 
 			case buf.Len() > 0 && !isAudio(llmResp):
 				if !yield(newAggregateText(buf.String()), nil) {
@@ -306,7 +305,7 @@ func (m *Gemini) StreamGenerateContent(ctx context.Context, contents []*genai.Co
 			switch {
 			case containsText(llmResp):
 				buf.WriteString(llmResp.Content.Parts[0].Text)
-				llmResp.Partial = true
+				llmResp.WithPartial(true)
 
 			case buf.Len() > 0 && !isAudio(llmResp):
 				if !yield(newAggregateText(buf.String()), nil) {
