@@ -65,7 +65,7 @@ func (m *Base) WithSafetySettings(settings []*genai.SafetySetting) *Base {
 
 // Connect creates a live connection to the LLM.
 // This method should be overridden by specific LLM implementations.
-func (m *Base) Connect() (BaseLLMConnection, error) {
+func (m *Base) Connect() (BaseConnection, error) {
 	return nil, fmt.Errorf("Connect not implemented for BaseLLM")
 }
 

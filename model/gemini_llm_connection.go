@@ -22,7 +22,7 @@ type GeminiLLMConnection struct {
 	closed     bool
 }
 
-var _ BaseLLMConnection = (*GeminiLLMConnection)(nil)
+var _ BaseConnection = (*GeminiLLMConnection)(nil)
 
 // newGeminiLLMConnection creates a new GeminiLLMConnection.
 func newGeminiLLMConnection(model string, client *genai.Client) *GeminiLLMConnection {

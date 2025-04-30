@@ -9,8 +9,8 @@ import (
 	"google.golang.org/genai"
 )
 
-// BaseLLMConnection defines the interface for a live model connection.
-type BaseLLMConnection interface {
+// BaseConnection defines the interface for a live model connection.
+type BaseConnection interface {
 	// SendHistory sends the conversation history to the model.
 	// The model will respond if the last content is from user, otherwise it will
 	// wait for new user input before responding.

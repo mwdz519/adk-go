@@ -33,7 +33,7 @@ type Model interface {
 	Name() string
 
 	// Connect creates a live connection to the model.
-	Connect() (BaseLLMConnection, error)
+	Connect() (BaseConnection, error)
 
 	// Generate generates content from the model.
 	Generate(ctx context.Context, request *LLMRequest) (*LLMResponse, error)
