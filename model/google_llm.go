@@ -193,80 +193,227 @@ func (m *Gemini) GenerateContent(ctx context.Context, contents []*genai.Content,
 }
 
 // StreamGenerate streams generated content from the model.
-func (m *Gemini) StreamGenerate(ctx context.Context, request *LLMRequest) (StreamGenerateResponse, error) {
-	// Get access to the Models service
-	models := m.genAIClient.Models
+func (m *Gemini) StreamGenerate(ctx context.Context, request *LLMRequest) iter.Seq2[*LLMResponse, error] {
+	return func(yield func(*LLMResponse, error) bool) {
+		// Create config for generate content
+		config := &genai.GenerateContentConfig{}
 
-	// Create config for generate content
-	config := &genai.GenerateContentConfig{}
+		// Apply generation config if provided
+		if request.Config != nil {
+			config.Temperature = request.Config.Temperature
+			config.MaxOutputTokens = request.Config.MaxOutputTokens
+			config.TopP = request.Config.TopP
+			config.TopK = request.Config.TopK
+		}
 
-	// Apply generation config if provided
-	if request.Config != nil {
-		config.Temperature = request.Config.Temperature
-		config.MaxOutputTokens = request.Config.MaxOutputTokens
-		config.TopP = request.Config.TopP
-		config.TopK = request.Config.TopK
+		// Apply safety settings if provided
+		if len(request.SafetySettings) > 0 {
+			config.SafetySettings = request.SafetySettings
+		}
+
+		// Apply tool if provided
+		if len(request.Tools) > 0 {
+			config.Tools = request.Tools
+		}
+
+		// Ensure the last message is from the user
+		contents := m.appendUserContent(request.Contents)
+
+		// Stream generate content
+		stream := m.genAIClient.Models.GenerateContentStream(ctx, m.model, contents, config)
+
+		var (
+			buf      strings.Builder
+			lastResp *genai.GenerateContentResponse
+		)
+		for resp, err := range stream {
+			// catch error first
+			if err != nil {
+				if !yield(nil, err) {
+					return
+				}
+				continue
+			}
+
+			if ctx.Err() != nil || resp == nil {
+				return
+			}
+
+			lastResp = resp
+			llmResp := CreateLLMResponse(resp)
+
+			switch {
+			case containsText(llmResp):
+				buf.WriteString(llmResp.Content.Parts[0].Text)
+				llmResp.Partial = true
+
+			case buf.Len() > 0 && !isAudio(llmResp):
+				if !yield(newAggregateText(buf.String()), nil) {
+					return
+				}
+				buf.Reset()
+			}
+
+			if !yield(llmResp, nil) {
+				return
+			}
+		}
+
+		if buf.Len() > 0 && lastResp != nil && finishStop(lastResp) {
+			yield(newAggregateText(buf.String()), nil)
+		}
 	}
-
-	// Apply safety settings if provided
-	if request.SafetySettings != nil && len(request.SafetySettings) > 0 {
-		config.SafetySettings = request.SafetySettings
-	}
-
-	// Ensure the last message is from the user
-	contents := m.appendUserContent(request.Contents)
-
-	// Stream generate content
-	stream := models.GenerateContentStream(ctx, m.model, contents, config)
-
-	return &geminiStreamResponse{
-		stream: stream,
-	}, nil
 }
 
 // StreamGenerateContent streams generated content from the model.
-func (m *Gemini) StreamGenerateContent(ctx context.Context, contents []*genai.Content, config *genai.GenerateContentConfig) (StreamGenerateResponse, error) {
-	// Get access to the Models service
-	models := m.genAIClient.Models
+func (m *Gemini) StreamGenerateContent(ctx context.Context, contents []*genai.Content, config *genai.GenerateContentConfig) iter.Seq2[*LLMResponse, error] {
+	return func(yield func(*LLMResponse, error) bool) {
+		// Create generate content config
+		genConfig := &genai.GenerateContentConfig{}
 
-	// Create generate content config
-	genConfig := &genai.GenerateContentConfig{}
+		// Apply generation config if provided
+		if config != nil {
+			genConfig.MaxOutputTokens = config.MaxOutputTokens
+			genConfig.Temperature = config.Temperature
+			genConfig.TopP = config.TopP
+			genConfig.TopK = config.TopK
+		}
 
-	// Apply generation config if provided
-	if config != nil {
-		genConfig.MaxOutputTokens = config.MaxOutputTokens
-		genConfig.Temperature = config.Temperature
-		genConfig.TopP = config.TopP
-		genConfig.TopK = config.TopK
+		// Ensure the last message is from the user
+		contents = m.appendUserContent(contents)
+
+		// Stream generate content
+		stream := m.genAIClient.Models.GenerateContentStream(ctx, m.model, contents, genConfig)
+
+		var (
+			buf      strings.Builder
+			lastResp *genai.GenerateContentResponse
+		)
+		for resp, err := range stream {
+			// catch error first
+			if err != nil {
+				if !yield(nil, err) {
+					return
+				}
+				continue
+			}
+
+			if ctx.Err() != nil || resp == nil {
+				return
+			}
+
+			lastResp = resp
+			llmResp := CreateLLMResponse(resp)
+
+			switch {
+			case containsText(llmResp):
+				buf.WriteString(llmResp.Content.Parts[0].Text)
+				llmResp.Partial = true
+
+			case buf.Len() > 0 && !isAudio(llmResp):
+				if !yield(newAggregateText(buf.String()), nil) {
+					return
+				}
+				buf.Reset()
+			}
+
+			if !yield(llmResp, nil) {
+				return
+			}
+		}
+
+		if buf.Len() > 0 && lastResp != nil && finishStop(lastResp) {
+			yield(newAggregateText(buf.String()), nil)
+		}
 	}
-
-	// Ensure the last message is from the user
-	contents = m.appendUserContent(contents)
-
-	// Stream generate content
-	stream := models.GenerateContentStream(ctx, m.model, contents, genConfig)
-
-	return &geminiStreamResponse{
-		stream: stream,
-	}, nil
 }
 
 // geminiStreamResponse implements [StreamGenerateResponse] for [Gemini].
 type geminiStreamResponse struct {
-	stream    iter.Seq2[*genai.GenerateContentResponse, error]
-	streamIdx int
+	stream iter.Seq2[*genai.GenerateContentResponse, error]
 }
 
+var _ StreamGenerateResponse = (*geminiStreamResponse)(nil)
+
 // Next returns the next response in the stream.
-func (s *geminiStreamResponse) Next() (*genai.GenerateContentResponse, error) {
+func (s *geminiStreamResponse) Next(ctx context.Context) iter.Seq2[*LLMResponse, error] {
 	// With [iter.Seq2], we need to use a for loop with a single iteration
 	// to get the next value and error
-	for resp, err := range s.stream {
-		return resp, err
-	}
+	return func(yield func(*LLMResponse, error) bool) {
+		var (
+			buf      strings.Builder
+			lastResp *genai.GenerateContentResponse
+		)
+		for resp, err := range s.stream {
+			// catch error first
+			if err != nil {
+				if !yield(nil, err) {
+					return
+				}
+				continue
+			}
 
-	// If the iterator is empty, return nil
-	return nil, nil
+			if ctx.Err() != nil || resp == nil {
+				return
+			}
+
+			lastResp = resp
+			llmResp := CreateLLMResponse(resp)
+
+			switch {
+			case containsText(llmResp):
+				buf.WriteString(llmResp.Content.Parts[0].Text)
+				llmResp.Partial = true
+
+			case buf.Len() > 0 && !isAudio(llmResp):
+				if !yield(newAggregateText(buf.String()), nil) {
+					return
+				}
+				buf.Reset()
+			}
+
+			if !yield(llmResp, nil) {
+				return
+			}
+		}
+
+		if buf.Len() > 0 && lastResp != nil && finishStop(lastResp) {
+			yield(newAggregateText(buf.String()), nil)
+		}
+	}
+}
+
+func newAggregateText(s string) *LLMResponse {
+	return &LLMResponse{
+		Content: &genai.Content{
+			Role:  RoleModel,
+			Parts: []*genai.Part{genai.NewPartFromText(s)},
+		},
+	}
+}
+
+// containsText returns true when the first part has a non-empty Text field.
+func containsText(r *LLMResponse) bool {
+	return r.Content != nil && len(r.Content.Parts) > 0 && r.Content.Parts[0].Text != ""
+}
+
+// isAudio returns true when InlineData is present (optionally mime-typed audio/*).
+func isAudio(r *LLMResponse) bool {
+	if r.Content == nil || len(r.Content.Parts) == 0 {
+		return false
+	}
+	if data := r.Content.Parts[0].InlineData; data != nil {
+		if data.MIMEType == "" {
+			return true
+		}
+		return strings.HasPrefix(data.MIMEType, "audio/")
+	}
+	return false
+}
+
+// finishStop reports whether the first candidate finished with STOP.
+func finishStop(r *genai.GenerateContentResponse) bool {
+	return r != nil && len(r.Candidates) > 0 && r.Candidates[0].FinishReason == genai.FinishReasonStop
 }
 
 const repponseLogFmt = `
