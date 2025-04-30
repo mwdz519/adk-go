@@ -5,7 +5,9 @@ package model
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"iter"
 
 	"google.golang.org/genai"
 )
@@ -25,7 +27,7 @@ type Base struct {
 
 var _ Model = (*Base)(nil)
 
-// NewBase creates a new BaseLLM instance.
+// NewBase creates a new [Base] instance.
 func NewBase(model string) *Base {
 	return &Base{
 		model: model,
@@ -74,11 +76,19 @@ func (m *Base) GenerateContent(ctx context.Context, contents []*genai.Content, c
 }
 
 // StreamGenerate streams generated content from the model.
-func (m *Base) StreamGenerate(ctx context.Context, request *LLMRequest) (StreamGenerateResponse, error) {
-	return nil, fmt.Errorf("StreamGenerate not implemented for BaseLLM")
+func (m *Base) StreamGenerate(ctx context.Context, request *LLMRequest) iter.Seq2[*LLMResponse, error] {
+	return func(yield func(*LLMResponse, error) bool) {
+		if !yield(nil, errors.New("Base: not implemented yet")) {
+			return
+		}
+	}
 }
 
 // StreamGenerateContent streams generated content from the model.
-func (m *Base) StreamGenerateContent(ctx context.Context, contents []*genai.Content, config *genai.GenerateContentConfig) (StreamGenerateResponse, error) {
-	return nil, fmt.Errorf("StreamGenerateContent not implemented for BaseLLM")
+func (m *Base) StreamGenerateContent(ctx context.Context, contents []*genai.Content, config *genai.GenerateContentConfig) iter.Seq2[*LLMResponse, error] {
+	return func(yield func(*LLMResponse, error) bool) {
+		if !yield(nil, errors.New("Base: not implemented yet")) {
+			return
+		}
+	}
 }

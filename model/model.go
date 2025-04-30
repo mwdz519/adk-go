@@ -5,6 +5,7 @@ package model
 
 import (
 	"context"
+	"iter"
 
 	"google.golang.org/genai"
 )
@@ -52,10 +53,10 @@ type GenerativeModel interface {
 	Model
 
 	// StreamGenerate streams generated content from the model.
-	StreamGenerate(ctx context.Context, request *LLMRequest) (StreamGenerateResponse, error)
+	StreamGenerate(ctx context.Context, request *LLMRequest) iter.Seq2[*LLMResponse, error]
 
 	// StreamGenerateContent streams generated content from the model.
-	StreamGenerateContent(ctx context.Context, contents []*genai.Content, config *genai.GenerateContentConfig) (StreamGenerateResponse, error)
+	StreamGenerateContent(ctx context.Context, contents []*genai.Content, config *genai.GenerateContentConfig) iter.Seq2[*LLMResponse, error]
 
 	// WithGenerationConfig returns a new model with the specified generation config.
 	WithGenerationConfig(config *genai.GenerationConfig) GenerativeModel
@@ -67,7 +68,7 @@ type GenerativeModel interface {
 // StreamGenerateResponse represents a stream of generated content.
 type StreamGenerateResponse interface {
 	// Next returns the next response in the stream.
-	Next() (*genai.GenerateContentResponse, error)
+	Next(context.Context) iter.Seq2[*LLMResponse, error]
 }
 
 // BaseGenerativeModel provides a base implementation of GenerativeModel.
@@ -109,11 +110,11 @@ func (m *BaseGenerativeModel) GenerateContent(ctx context.Context, contents []*g
 }
 
 // StreamGenerate streams generated content from the model.
-func (m *BaseGenerativeModel) StreamGenerate(ctx context.Context, request *LLMRequest) (StreamGenerateResponse, error) {
+func (m *BaseGenerativeModel) StreamGenerate(ctx context.Context, request *LLMRequest) iter.Seq2[*LLMResponse, error] {
 	return m.Base.StreamGenerate(ctx, request)
 }
 
 // StreamGenerateContent streams generated content from the model.
-func (m *BaseGenerativeModel) StreamGenerateContent(ctx context.Context, contents []*genai.Content, config *genai.GenerateContentConfig) (StreamGenerateResponse, error) {
+func (m *BaseGenerativeModel) StreamGenerateContent(ctx context.Context, contents []*genai.Content, config *genai.GenerateContentConfig) iter.Seq2[*LLMResponse, error] {
 	return m.Base.StreamGenerateContent(ctx, contents, config)
 }
