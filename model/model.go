@@ -35,11 +35,8 @@ type Model interface {
 	// Connect creates a live connection to the model.
 	Connect() (BaseConnection, error)
 
-	// Generate generates content from the model.
-	Generate(ctx context.Context, request *LLMRequest) (*LLMResponse, error)
-
 	// GenerateContent generates content from the model.
-	GenerateContent(ctx context.Context, contents []*genai.Content, config *genai.GenerateContentConfig) (*LLMResponse, error)
+	GenerateContent(ctx context.Context, request *LLMRequest) (*LLMResponse, error)
 }
 
 // GenerateResponse represents a response from generating content.
@@ -52,11 +49,8 @@ type GenerateResponse struct {
 type GenerativeModel interface {
 	Model
 
-	// StreamGenerate streams generated content from the model.
-	StreamGenerate(ctx context.Context, request *LLMRequest) iter.Seq2[*LLMResponse, error]
-
 	// StreamGenerateContent streams generated content from the model.
-	StreamGenerateContent(ctx context.Context, contents []*genai.Content, config *genai.GenerateContentConfig) iter.Seq2[*LLMResponse, error]
+	StreamGenerateContent(ctx context.Context, request *LLMRequest) iter.Seq2[*LLMResponse, error]
 }
 
 // StreamGenerateResponse represents a stream of generated content.
@@ -93,22 +87,12 @@ func (m *BaseGenerativeModel) WithSafetySettings(settings []*genai.SafetySetting
 	return &clone
 }
 
-// Generate generates content from the model.
-func (m *BaseGenerativeModel) Generate(ctx context.Context, request *LLMRequest) (*LLMResponse, error) {
-	return m.Base.Generate(ctx, request)
-}
-
 // GenerateContent generates content from the model.
-func (m *BaseGenerativeModel) GenerateContent(ctx context.Context, contents []*genai.Content, config *genai.GenerateContentConfig) (*LLMResponse, error) {
-	return m.Base.GenerateContent(ctx, contents, config)
-}
-
-// StreamGenerate streams generated content from the model.
-func (m *BaseGenerativeModel) StreamGenerate(ctx context.Context, request *LLMRequest) iter.Seq2[*LLMResponse, error] {
-	return m.Base.StreamGenerate(ctx, request)
+func (m *BaseGenerativeModel) GenerateContent(ctx context.Context, request *LLMRequest) (*LLMResponse, error) {
+	return m.Base.GenerateContent(ctx, request)
 }
 
 // StreamGenerateContent streams generated content from the model.
-func (m *BaseGenerativeModel) StreamGenerateContent(ctx context.Context, contents []*genai.Content, config *genai.GenerateContentConfig) iter.Seq2[*LLMResponse, error] {
-	return m.Base.StreamGenerateContent(ctx, contents, config)
+func (m *BaseGenerativeModel) StreamGenerateContent(ctx context.Context, request *LLMRequest) iter.Seq2[*LLMResponse, error] {
+	return m.Base.StreamGenerateContent(ctx, request)
 }

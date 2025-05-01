@@ -63,28 +63,6 @@ func NewGemini(ctx context.Context, apiKey string, modelName string) (*Gemini, e
 	}, nil
 }
 
-// WithGenerationConfig returns a new model with the specified generation config.
-func (m *Gemini) WithGenerationConfig(config *genai.GenerationConfig) GenerativeModel {
-	// Create a new instance to avoid modifying the original
-	clone := &Gemini{
-		Base:            m.Base.WithGenerationConfig(config),
-		genAIClient:     m.genAIClient,
-		trackingHeaders: m.trackingHeaders,
-	}
-	return clone
-}
-
-// WithSafetySettings returns a new model with the specified safety settings.
-func (m *Gemini) WithSafetySettings(settings []*genai.SafetySetting) GenerativeModel {
-	// Create a new instance to avoid modifying the original
-	clone := &Gemini{
-		Base:            m.Base.WithSafetySettings(settings),
-		genAIClient:     m.genAIClient,
-		trackingHeaders: m.trackingHeaders,
-	}
-	return clone
-}
-
 // SupportedModels returns a list of supported Gemini models.
 //
 // See https://ai.google.dev/gemini-api/docs/models.
@@ -131,8 +109,8 @@ func (m *Gemini) appendUserContent(contents []*genai.Content) []*genai.Content {
 	}
 }
 
-// Generate generates content from the model.
-func (m *Gemini) Generate(ctx context.Context, request *LLMRequest) (*LLMResponse, error) {
+// GenerateContent generates content from the model.
+func (m *Gemini) GenerateContent(ctx context.Context, request *LLMRequest) (*LLMResponse, error) {
 	// Ensure the last message is from the user
 	request.Contents = m.appendUserContent(request.Contents)
 
@@ -167,31 +145,8 @@ func (m *Gemini) Generate(ctx context.Context, request *LLMRequest) (*LLMRespons
 	return CreateLLMResponse(response), nil
 }
 
-// GenerateContent generates content from the model.
-func (m *Gemini) GenerateContent(ctx context.Context, contents []*genai.Content, config *genai.GenerateContentConfig) (*LLMResponse, error) {
-	// Ensure the last message is from the user
-	contents = m.appendUserContent(contents)
-
-	// Create generate content config
-	genConfig := &genai.GenerationConfig{}
-	// Apply generation config if provided
-	if config != nil {
-		genConfig.MaxOutputTokens = config.MaxOutputTokens
-		genConfig.Temperature = config.Temperature
-		genConfig.TopP = config.TopP
-		genConfig.TopK = config.TopK
-	}
-
-	request := &LLMRequest{
-		Contents: contents,
-		Config:   genConfig,
-	}
-
-	return m.Generate(ctx, request)
-}
-
-// StreamGenerate streams generated content from the model.
-func (m *Gemini) StreamGenerate(ctx context.Context, request *LLMRequest) iter.Seq2[*LLMResponse, error] {
+// StreamGenerateContent streams generated content from the model.
+func (m *Gemini) StreamGenerateContent(ctx context.Context, request *LLMRequest) iter.Seq2[*LLMResponse, error] {
 	return func(yield func(*LLMResponse, error) bool) {
 		// Create config for generate content
 		config := &genai.GenerateContentConfig{}
@@ -260,27 +215,6 @@ func (m *Gemini) StreamGenerate(ctx context.Context, request *LLMRequest) iter.S
 			yield(newAggregateText(buf.String()), nil)
 		}
 	}
-}
-
-// StreamGenerateContent streams generated content from the model.
-func (m *Gemini) StreamGenerateContent(ctx context.Context, contents []*genai.Content, config *genai.GenerateContentConfig) iter.Seq2[*LLMResponse, error] {
-	request := &LLMRequest{
-		Contents: m.appendUserContent(contents),
-	}
-
-	// Apply generation config if provided
-	if config != nil {
-		genConfig := &genai.GenerationConfig{}
-		genConfig.Temperature = config.Temperature
-		genConfig.MaxOutputTokens = config.MaxOutputTokens
-		genConfig.TopP = config.TopP
-		genConfig.TopK = config.TopK
-
-		request.Config = genConfig
-		request.SafetySettings = config.SafetySettings
-	}
-
-	return m.StreamGenerate(ctx, request)
 }
 
 // geminiStreamResponse implements [StreamGenerateResponse] for [Gemini].

@@ -17,7 +17,7 @@ func TestGemini_Generate(t *testing.T) {
 		t.Fatalf("NewGemini: %v", err)
 	}
 
-	got, err := gemini.Generate(t.Context(), &LLMRequest{})
+	got, err := gemini.GenerateContent(t.Context(), &LLMRequest{})
 	if err != nil {
 		t.Fatalf("unexpected error on Generate: %v", err)
 	}
@@ -39,7 +39,7 @@ func TestGemini_StreamGenerate_UnarySuccess(t *testing.T) {
 		t.Fatalf("NewGemini: %v", err)
 	}
 
-	seq := gemini.StreamGenerate(t.Context(), &LLMRequest{})
+	seq := gemini.StreamGenerateContent(t.Context(), &LLMRequest{})
 	var got []*LLMResponse
 	for r, err := range seq {
 		if err != nil {
@@ -70,7 +70,7 @@ func TestGemini_StreamGenerate_StreamAggregation(t *testing.T) {
 		t.Fatalf("NewGemini: %v", err)
 	}
 
-	seq := gemini.StreamGenerate(t.Context(), &LLMRequest{})
+	seq := gemini.StreamGenerateContent(t.Context(), &LLMRequest{})
 	var texts []string
 	for r, err := range seq {
 		if err != nil {

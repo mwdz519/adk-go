@@ -112,8 +112,8 @@ func (m *Claude) Connect() (BaseConnection, error) {
 	return nil, fmt.Errorf("ClaudeConnection not implemented yet")
 }
 
-// Generate generates content from the model.
-func (m *Claude) Generate(ctx context.Context, request *LLMRequest) (*LLMResponse, error) {
+// GenerateContent generates content from the model.
+func (m *Claude) GenerateContent(ctx context.Context, request *LLMRequest) (*LLMResponse, error) {
 	// Convert messages to Anthropic format
 	messages := make([]anthropic.MessageParam, len(request.Contents))
 	for i, content := range request.Contents {
@@ -199,41 +199,8 @@ func (m *Claude) Generate(ctx context.Context, request *LLMRequest) (*LLMRespons
 	return m.messageToLLMResponse(message), nil
 }
 
-// GenerateContent generates content from the model.
-func (m *Claude) GenerateContent(ctx context.Context, contents []*genai.Content, config *genai.GenerateContentConfig) (*LLMResponse, error) {
-	request := &LLMRequest{
-		Contents: contents,
-	}
-
-	if config != nil {
-		genConfig := &genai.GenerationConfig{}
-		if config.Temperature != nil {
-			genConfig.Temperature = config.Temperature
-		}
-
-		// MaxOutputTokens is an int32 directly, not a pointer
-		genConfig.MaxOutputTokens = config.MaxOutputTokens
-
-		if config.TopP != nil {
-			genConfig.TopP = config.TopP
-		}
-		if config.TopK != nil {
-			genConfig.TopK = config.TopK
-		}
-		request.Config = genConfig
-		request.SafetySettings = config.SafetySettings
-	}
-
-	resp, err := m.Generate(ctx, request)
-	if err != nil {
-		return nil, err
-	}
-
-	return resp, nil
-}
-
-// StreamGenerate streams generated content from the model.
-func (m *Claude) StreamGenerate(ctx context.Context, request *LLMRequest) iter.Seq2[*LLMResponse, error] {
+// StreamGenerateContent streams generated content from the model.
+func (m *Claude) StreamGenerateContent(ctx context.Context, request *LLMRequest) iter.Seq2[*LLMResponse, error] {
 	return func(yield func(*LLMResponse, error) bool) {
 		// Convert to Anthropic format
 		messages := make([]anthropic.MessageParam, len(request.Contents))
@@ -381,34 +348,6 @@ func (m *Claude) StreamGenerate(ctx context.Context, request *LLMRequest) iter.S
 			}
 		}
 	}
-}
-
-// StreamGenerateContent streams generated content from the model.
-func (m *Claude) StreamGenerateContent(ctx context.Context, contents []*genai.Content, config *genai.GenerateContentConfig) iter.Seq2[*LLMResponse, error] {
-	request := &LLMRequest{
-		Contents: contents,
-	}
-
-	if config != nil {
-		genConfig := &genai.GenerationConfig{}
-		if config.Temperature != nil {
-			genConfig.Temperature = config.Temperature
-		}
-
-		// MaxOutputTokens is an int32 directly, not a pointer
-		genConfig.MaxOutputTokens = config.MaxOutputTokens
-
-		if config.TopP != nil {
-			genConfig.TopP = config.TopP
-		}
-		if config.TopK != nil {
-			genConfig.TopK = config.TopK
-		}
-		request.Config = genConfig
-		request.SafetySettings = config.SafetySettings
-	}
-
-	return m.StreamGenerate(ctx, request)
 }
 
 // claudeStreamResponse implements GenerateStreamResponse for Claude models.

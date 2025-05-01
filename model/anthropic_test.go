@@ -30,7 +30,7 @@ func TestClaude_Generate(t *testing.T) {
 			},
 		},
 	}
-	got, err := claude.Generate(t.Context(), req)
+	got, err := claude.GenerateContent(t.Context(), req)
 	if err != nil {
 		t.Fatalf("unexpected error on Generate: %v", err)
 	}
@@ -59,7 +59,7 @@ func TestClaude_StreamGenerate_UnarySuccess(t *testing.T) {
 			},
 		},
 	}
-	seq := claude.StreamGenerate(t.Context(), req)
+	seq := claude.StreamGenerateContent(t.Context(), req)
 	var got []*LLMResponse
 	for r, err := range seq {
 		if err != nil {
@@ -98,7 +98,7 @@ func TestClaude_StreamGenerate_StreamAggregation(t *testing.T) {
 			},
 		},
 	}
-	seq := claude.StreamGenerate(t.Context(), req)
+	seq := claude.StreamGenerateContent(t.Context(), req)
 	var texts []string
 	for r, err := range seq {
 		if err != nil {
