@@ -4,6 +4,7 @@
 package model
 
 import (
+	"cmp"
 	"context"
 	"errors"
 	"fmt"
@@ -14,60 +15,107 @@ import (
 	"slices"
 
 	anthropic "github.com/anthropics/anthropic-sdk-go"
-	"github.com/anthropics/anthropic-sdk-go/option"
+	anthropic_bedrock "github.com/anthropics/anthropic-sdk-go/bedrock"
+	anthropic_option "github.com/anthropics/anthropic-sdk-go/option"
 	"github.com/anthropics/anthropic-sdk-go/packages/param"
-	"github.com/anthropics/anthropic-sdk-go/packages/ssestream"
 	"github.com/anthropics/anthropic-sdk-go/shared/constant"
+	anthropic_vertex "github.com/anthropics/anthropic-sdk-go/vertex"
 	"github.com/bytedance/sonic"
 	"google.golang.org/genai"
 )
 
-const (
-	// ClaudeDefaultModel is the default model name for [Claude].
-	//
-	// This model is only available on Google Cloud Platform (GCP) Vertex AI.
-	// If you want to use the Anthropic official model, pass any model name that is defined in the
-	// anthropic-sdk-go package's constants to [NewClaude].
-	ClaudeDefaultModel = "claude-3-5-sonnet-v2@20241022"
+// ClaudeMode represents the mode of the Claude model.
+type ClaudeMode int
 
-	// EnvAnthropicAPIKey is the environment variable name for the Anthropic API key.
-	EnvAnthropicAPIKey = "ANTHROPIC_API_KEY"
+const (
+	// ClaudeModeAnthropic is the mode for Anthropic's official models.
+	ClaudeModeAnthropic ClaudeMode = iota
+
+	// ClaudeModeVertexAI is the mode for Google Cloud Platform (GCP) Vertex AI models.
+	ClaudeModeVertexAI
+
+	// ClaudeModeBedrock is the mode for Amazon Web Services (AWS) Bedrock models.
+	ClaudeModeBedrock
 )
+
+// detectClaudeDefaultModel returns the default model name based on the mode.
+func detectClaudeDefaultModel(mode ClaudeMode) string {
+	switch mode {
+	case ClaudeModeAnthropic:
+		return anthropic.ModelClaude3_5Sonnet20241022
+	case ClaudeModeVertexAI:
+		return "claude-3-5-sonnet-v2@20241022"
+	case ClaudeModeBedrock:
+		return "anthropic.claude-3-5-sonnet-20241022-v2:0"
+	default:
+		return ""
+	}
+}
 
 // Claude represents a Claude Large Language Model.
 type Claude struct {
-	*Base
+	*Config
 
 	anthropicClient anthropic.Client
 }
 
-var _ GenerativeModel = (*Claude)(nil)
+var _ Model = (*Claude)(nil)
 
 // NewClaude creates a new Claude LLM instance.
-func NewClaude(ctx context.Context, apiKey string, modelName string) (*Claude, error) {
-	// Check API key and use [EnvAnthropicAPIKey] environment variable if not provided
-	if apiKey == "" {
-		envApiKey := os.Getenv(EnvAnthropicAPIKey)
-		if envApiKey == "" {
-			return nil, fmt.Errorf("either apiKey arg or %q environment variable must bu set", EnvAnthropicAPIKey)
-		}
-		apiKey = envApiKey
-	}
-
+func NewClaude(ctx context.Context, modelName string, mode ClaudeMode, opts ...Option) (*Claude, error) {
 	// Use default model if none provided
 	if modelName == "" {
-		modelName = ClaudeDefaultModel
+		modelName = detectClaudeDefaultModel(mode)
 	}
 
-	anthropicClient := anthropic.NewClient(option.WithAPIKey(apiKey))
+	var ropts []anthropic_option.RequestOption
+	switch mode {
+	case ClaudeModeAnthropic:
+		ropts = append(ropts, anthropic.DefaultClientOptions()...)
 
-	return &Claude{
-		Base:            NewBase(modelName),
+	case ClaudeModeVertexAI:
+		region := cmp.Or(os.Getenv("GOOGLE_CLOUD_LOCATION"), os.Getenv("GOOGLE_CLOUD_REGION"))
+		if region == "" {
+			return nil, fmt.Errorf("%q or %q is required", "GOOGLE_CLOUD_LOCATION", "GOOGLE_CLOUD_REGION")
+		}
+		projectID := os.Getenv("GOOGLE_CLOUD_PROJECT")
+		if projectID == "" {
+			return nil, fmt.Errorf("%q is required", "GOOGLE_CLOUD_PROJECT")
+		}
+		// https://pkg.go.dev/cloud.google.com/go/aiplatform/apiv1#DefaultAuthScopes
+		scopes := []string{
+			"https://www.googleapis.com/auth/cloud-platform",
+			"https://www.googleapis.com/auth/cloud-platform.read-only",
+		}
+		ropts = append(ropts, anthropic_vertex.WithGoogleAuth(ctx, region, projectID, scopes...))
+
+	case ClaudeModeBedrock:
+		ropts = append(ropts, anthropic_bedrock.WithLoadDefaultConfig(ctx))
+	}
+
+	anthropicClient := anthropic.NewClient(ropts...)
+
+	claude := &Claude{
+		Config: &Config{
+			model: modelName,
+		},
 		anthropicClient: anthropicClient,
-	}, nil
+	}
+	for _, opt := range opts {
+		claude.Config = opt.apply(claude.Config)
+	}
+
+	return claude, nil
+}
+
+// Name returns the name of the model.
+func (m *Claude) Name() string {
+	return m.model
 }
 
 // SupportedModels returns a list of supported Claude models.
+//
+// See https://docs.anthropic.com/en/docs/about-claude/models/all-models.
 func (m *Claude) SupportedModels() []string {
 	return []string{
 		// Anthropic API
@@ -147,9 +195,8 @@ func (m *Claude) GenerateContent(ctx context.Context, request *LLMRequest) (*LLM
 		}
 
 		// Add tools if provided
-		var tools []anthropic.ToolUnionParam
 		if len(request.Tools) > 0 && request.Tools[0].FunctionDeclarations != nil {
-			tools = slices.Grow(tools, len(request.Tools[0].FunctionDeclarations))
+			tools := make([]anthropic.ToolUnionParam, 0, len(request.Tools[0].FunctionDeclarations))
 			for _, funcDeclarations := range request.Tools[0].FunctionDeclarations {
 				toolUnion, err := m.funcDeclarationToToolParam(funcDeclarations)
 				if err != nil {
@@ -157,8 +204,8 @@ func (m *Claude) GenerateContent(ctx context.Context, request *LLMRequest) (*LLM
 				}
 				tools = append(tools, toolUnion)
 			}
+			params.Tools = tools
 		}
-		params.Tools = tools
 	}
 
 	if len(request.ToolMap) > 0 {
@@ -171,32 +218,21 @@ func (m *Claude) GenerateContent(ctx context.Context, request *LLMRequest) (*LLM
 		params.ToolChoice = toolchoice
 	}
 
-	// Apply system prompt if it exists in first content
-	systemText, hasSystem := m.extractSystemPrompt(request.Contents)
-	if hasSystem {
-		// For System, we need to create TextBlockParam
-		var systemTextBlocks []anthropic.TextBlockParam
-		systemTextBlocks = append(systemTextBlocks, anthropic.TextBlockParam{
-			Text: systemText,
-			Type: constant.ValueOf[constant.Text]().Default(),
-		})
-		params.System = systemTextBlocks
-
-		// Remove system message from the message list since it's set separately
-		// Only if there are more than one message, otherwise we keep the empty list
-		if len(messages) > 1 {
-			messages = messages[1:]
-			params.Messages = messages
+	if len(request.SystemInstructions) > 0 {
+		for _, instruction := range request.SystemInstructions {
+			params.System = append(params.System, anthropic.TextBlockParam{
+				Text: instruction,
+			})
 		}
 	}
 
 	// Make API call
-	message, err := m.anthropicClient.Messages.New(ctx, params)
+	resp, err := m.anthropicClient.Messages.New(ctx, params)
 	if err != nil {
 		return nil, fmt.Errorf("claude API error: %w", err)
 	}
 
-	return m.messageToLLMResponse(message), nil
+	return m.messageToLLMResponse(resp), nil
 }
 
 // StreamGenerateContent streams generated content from the model.
@@ -235,16 +271,6 @@ func (m *Claude) StreamGenerateContent(ctx context.Context, request *LLMRequest)
 			}
 		}
 
-		if liveConfig := request.LiveConnectConfig; liveConfig != nil {
-			if liveConfig.SystemInstruction != nil {
-				system, err := m.partToMessageBlock(liveConfig.SystemInstruction.Parts[0])
-				if !yield(nil, err) {
-					return
-				}
-				params.System = append(params.System, *system.OfRequestTextBlock)
-			}
-		}
-
 		// Add tools if provided
 		if len(request.Tools) > 0 && request.Tools[0].FunctionDeclarations != nil {
 			tools := make([]anthropic.ToolUnionParam, 0, len(request.Tools[0].FunctionDeclarations))
@@ -270,9 +296,16 @@ func (m *Claude) StreamGenerateContent(ctx context.Context, request *LLMRequest)
 			params.ToolChoice = toolchoice
 		}
 
+		if len(request.SystemInstructions) > 0 {
+			for _, instruction := range request.SystemInstructions {
+				params.System = append(params.System, anthropic.TextBlockParam{
+					Text: instruction,
+				})
+			}
+		}
+
 		// Make streaming API call - stream parameter is added by the method
 		stream := m.anthropicClient.Messages.NewStreaming(ctx, params)
-		defer stream.Close()
 
 		if ctx.Err() != nil || stream == nil {
 			return
@@ -280,12 +313,6 @@ func (m *Claude) StreamGenerateContent(ctx context.Context, request *LLMRequest)
 
 		message := anthropic.Message{}
 		for stream.Next() {
-			if err := stream.Err(); err != nil {
-				if !yield(nil, err) {
-					return
-				}
-			}
-
 			// Accumulate the response
 			llmResp := stream.Current()
 			if err := message.Accumulate(llmResp); err != nil {
@@ -295,13 +322,29 @@ func (m *Claude) StreamGenerateContent(ctx context.Context, request *LLMRequest)
 				}
 			}
 
-			if message.StopReason == anthropic.StopReasonEndTurn {
+			if message.StopReason == anthropic.MessageStopReasonEndTurn {
 				return
 			}
 
 			// Create partial response
 			var parts []*genai.Part
 			partial := true
+
+			// Process based on event type
+			switch messageStreamEvent := llmResp.AsAny().(type) {
+			case anthropic.MessageStartEvent:
+				// no-op
+			case anthropic.ContentBlockStartEvent:
+				// no-op
+			case anthropic.ContentBlockDeltaEvent:
+				// Extract delta from content block delta
+				switch delta := messageStreamEvent.Delta.AsAny().(type) {
+				case anthropic.TextDelta:
+					parts = append(parts, genai.NewPartFromText(delta.Text))
+				}
+			case anthropic.ContentBlockStopEvent:
+				// no-op
+			}
 
 			for _, mcontent := range message.Content {
 				part, err := m.contentBlockToPart(mcontent)
@@ -313,16 +356,6 @@ func (m *Claude) StreamGenerateContent(ctx context.Context, request *LLMRequest)
 				if part.Text != "" {
 					parts = append(parts, genai.NewPartFromText(part.Text))
 					partial = false
-				}
-			}
-
-			// Process based on event type
-			switch llmResp.Type {
-			case "content_block_delta":
-				// Extract delta text from content block delta
-				blockDeltaEvent := llmResp.AsContentBlockDeltaEvent()
-				if blockDeltaEvent.Delta.Type == "text_delta" {
-					parts = append(parts, genai.NewPartFromText(blockDeltaEvent.Delta.Text))
 				}
 			}
 
@@ -347,64 +380,9 @@ func (m *Claude) StreamGenerateContent(ctx context.Context, request *LLMRequest)
 				}
 			}
 		}
-	}
-}
-
-// claudeStreamResponse implements GenerateStreamResponse for Claude models.
-type claudeStreamResponse struct {
-	stream  *ssestream.Stream[anthropic.MessageStreamEventUnion]
-	message anthropic.Message
-	logger  *slog.Logger
-}
-
-// Next returns the next response in the stream.
-func (s *claudeStreamResponse) Next(ctx context.Context) iter.Seq2[*LLMResponse, error] {
-	return func(yield func(*LLMResponse, error) bool) {
-		for s.stream.Next() {
-			if err := s.stream.Err(); err != nil {
-				if !yield(nil, err) {
-					return
-				}
-			}
-
-			event := s.stream.Current()
-
-			// Accumulate the response
-			if err := s.message.Accumulate(event); err != nil {
-				s.logger.ErrorContext(ctx, "accumulating message", slog.Any("err", err))
-				if !yield(nil, err) {
-					return
-				}
-
-				// Create partial response
-				var parts []*genai.Part
-
-				// Process based on event type
-				switch event.Type {
-				case "content_block_delta":
-					// Extract delta text from content block delta
-					blockDeltaEvent := event.AsContentBlockDeltaEvent()
-					if blockDeltaEvent.Delta.Type == "text_delta" {
-						parts = append(parts, genai.NewPartFromText(blockDeltaEvent.Delta.Text))
-					}
-				}
-
-				// Only return a response if we have parts
-				if len(parts) > 0 {
-					response := &genai.GenerateContentResponse{
-						Candidates: []*genai.Candidate{
-							{
-								Content: &genai.Content{
-									Role:  RoleAssistant,
-									Parts: parts,
-								},
-							},
-						},
-					}
-					if !yield(CreateLLMResponse(response), nil) {
-						return
-					}
-				}
+		if err := stream.Err(); err != nil {
+			if !yield(nil, err) {
+				return
 			}
 		}
 	}
@@ -423,19 +401,19 @@ func (m *Claude) asClaudeRole(role string) anthropic.MessageParamRole {
 	return anthropic.MessageParamRoleUser
 }
 
-var claudeStopReasons = []anthropic.StopReason{
-	anthropic.StopReasonEndTurn,
-	anthropic.StopReasonStopSequence,
-	anthropic.StopReasonToolUse,
+var claudeStopReasons = []anthropic.MessageStopReason{
+	anthropic.MessageStopReasonEndTurn,
+	anthropic.MessageStopReasonStopSequence,
+	anthropic.MessageStopReasonToolUse,
 }
 
 // asGenAIFinishReason converts [anthropic.StopReason] to [genai.FinishReason].
-func (m *Claude) asGenAIFinishReason(stopReason anthropic.StopReason) genai.FinishReason {
+func (m *Claude) asGenAIFinishReason(stopReason anthropic.MessageStopReason) genai.FinishReason {
 	if slices.Contains(claudeStopReasons, stopReason) {
 		return genai.FinishReasonStop
 	}
 
-	if stopReason == anthropic.StopReasonMaxTokens {
+	if stopReason == anthropic.MessageStopReasonMaxTokens {
 		return genai.FinishReasonMaxTokens
 	}
 
@@ -565,19 +543,4 @@ func (m *Claude) funcDeclarationToToolParam(funcDeclaration *genai.FunctionDecla
 	toolUnion.OfTool.Description = param.NewOpt(funcDeclaration.Description)
 
 	return toolUnion, nil
-}
-
-// extractSystemPrompt extracts system prompt text from the first message if it's a system message
-func (m *Claude) extractSystemPrompt(messages []*genai.Content) (string, bool) {
-	if len(messages) == 0 || messages[0].Role != RoleSystem {
-		return "", false
-	}
-
-	systemText := ""
-	for _, part := range messages[0].Parts {
-		if part != nil && part.Text != "" {
-			systemText += part.Text
-		}
-	}
-	return systemText, systemText != ""
 }

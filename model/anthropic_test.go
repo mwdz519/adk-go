@@ -4,7 +4,6 @@
 package model_test
 
 import (
-	"os"
 	"reflect"
 	"testing"
 
@@ -17,7 +16,7 @@ import (
 func TestClaude_Generate(t *testing.T) {
 	t.Skip()
 
-	claude, err := model.NewClaude(t.Context(), os.Getenv(model.EnvAnthropicAPIKey), anthropic.ModelClaude3_7SonnetLatest)
+	claude, err := model.NewClaude(t.Context(), anthropic.ModelClaude3_7SonnetLatest, model.ClaudeModeAnthropic)
 	if err != nil {
 		t.Fatalf("NewClaude: %v", err)
 	}
@@ -46,7 +45,7 @@ func TestClaude_Generate(t *testing.T) {
 func TestClaude_StreamGenerate_UnarySuccess(t *testing.T) {
 	t.Skip()
 
-	claude, err := model.NewClaude(t.Context(), os.Getenv(model.EnvAnthropicAPIKey), anthropic.ModelClaude3_7SonnetLatest)
+	claude, err := model.NewClaude(t.Context(), anthropic.ModelClaude3_7SonnetLatest, model.ClaudeModeAnthropic)
 	if err != nil {
 		t.Fatalf("NewClaude: %v", err)
 	}
@@ -85,7 +84,7 @@ func TestClaude_StreamGenerate_UnarySuccess(t *testing.T) {
 func TestClaude_StreamGenerate_StreamAggregation(t *testing.T) {
 	t.Skip()
 
-	claude, err := model.NewClaude(t.Context(), os.Getenv(model.EnvAnthropicAPIKey), anthropic.ModelClaude3_7SonnetLatest)
+	claude, err := model.NewClaude(t.Context(), anthropic.ModelClaude3_7SonnetLatest, model.ClaudeModeAnthropic)
 	if err != nil {
 		t.Fatalf("NewClaude: %v", err)
 	}
