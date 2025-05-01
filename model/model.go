@@ -61,18 +61,7 @@ type Model interface {
 
 	// GenerateContent generates content from the model.
 	GenerateContent(ctx context.Context, request *LLMRequest) (*LLMResponse, error)
-}
-
-// GenerativeModel represents a generative AI model.
-type GenerativeModel interface {
-	Model
 
 	// StreamGenerateContent streams generated content from the model.
 	StreamGenerateContent(ctx context.Context, request *LLMRequest) iter.Seq2[*LLMResponse, error]
-}
-
-// StreamGenerateResponse represents a stream of generated content.
-type StreamGenerateResponse interface {
-	// Next returns the next response in the stream.
-	Next(context.Context) iter.Seq2[*LLMResponse, error]
 }

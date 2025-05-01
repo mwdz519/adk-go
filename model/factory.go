@@ -23,9 +23,6 @@ const (
 type ModelFactory interface {
 	// CreateModel creates a model with the specified name.
 	CreateModel(ctx context.Context, modelName string) (Model, error)
-
-	// CreateGenerativeModel creates a generative model with the specified name.
-	CreateGenerativeModel(ctx context.Context, modelName string) (GenerativeModel, error)
 }
 
 // DefaultModelFactory is the default implementation of ModelFactory.
@@ -48,31 +45,6 @@ func (f *DefaultModelFactory) CreateModel(ctx context.Context, modelName string)
 	model, err := NewLLM(ctx, f.apiKey, modelName)
 	if err == nil {
 		return model, nil
-	}
-
-	// Fall back to legacy string prefix matching if registry fails
-	modelType := getModelType(modelName)
-
-	switch modelType {
-	case ModelTypeGemini:
-		return NewGemini(ctx, f.apiKey, modelName)
-	case ModelTypeClaude:
-		return NewClaude(ctx, f.apiKey, modelName)
-	default:
-		return nil, fmt.Errorf("unsupported model: %s", modelName)
-	}
-}
-
-// CreateGenerativeModel creates a generative model with the specified name.
-func (f *DefaultModelFactory) CreateGenerativeModel(ctx context.Context, modelName string) (GenerativeModel, error) {
-	// First try using the registry for more flexible pattern matching
-	model, err := NewLLM(ctx, f.apiKey, modelName)
-	if err == nil {
-		// Try to convert to GenerativeModel
-		if genModel, ok := model.(GenerativeModel); ok {
-			return genModel, nil
-		}
-		return nil, fmt.Errorf("model %s does not implement GenerativeModel", modelName)
 	}
 
 	// Fall back to legacy string prefix matching if registry fails
