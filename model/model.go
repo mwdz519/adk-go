@@ -39,12 +39,6 @@ type Model interface {
 	GenerateContent(ctx context.Context, request *LLMRequest) (*LLMResponse, error)
 }
 
-// GenerateResponse represents a response from generating content.
-type GenerateResponse struct {
-	// Content is the generated content.
-	Content *genai.GenerateContentResponse
-}
-
 // GenerativeModel represents a generative AI model.
 type GenerativeModel interface {
 	Model
@@ -57,42 +51,4 @@ type GenerativeModel interface {
 type StreamGenerateResponse interface {
 	// Next returns the next response in the stream.
 	Next(context.Context) iter.Seq2[*LLMResponse, error]
-}
-
-// BaseGenerativeModel provides a base implementation of GenerativeModel.
-type BaseGenerativeModel struct {
-	*Base
-}
-
-var _ GenerativeModel = (*BaseGenerativeModel)(nil)
-
-// NewBaseGenerativeModel creates a new base generative model.
-func NewBaseGenerativeModel(name string) *BaseGenerativeModel {
-	return &BaseGenerativeModel{
-		Base: NewBase(name),
-	}
-}
-
-// WithGenerationConfig returns a new model with the specified generation config.
-func (m *BaseGenerativeModel) WithGenerationConfig(config *genai.GenerationConfig) GenerativeModel {
-	clone := *m
-	clone.Base = m.Base.WithGenerationConfig(config)
-	return &clone
-}
-
-// WithSafetySettings returns a new model with the specified safety settings.
-func (m *BaseGenerativeModel) WithSafetySettings(settings []*genai.SafetySetting) GenerativeModel {
-	clone := *m
-	clone.Base = m.Base.WithSafetySettings(settings)
-	return &clone
-}
-
-// GenerateContent generates content from the model.
-func (m *BaseGenerativeModel) GenerateContent(ctx context.Context, request *LLMRequest) (*LLMResponse, error) {
-	return m.Base.GenerateContent(ctx, request)
-}
-
-// StreamGenerateContent streams generated content from the model.
-func (m *BaseGenerativeModel) StreamGenerateContent(ctx context.Context, request *LLMRequest) iter.Seq2[*LLMResponse, error] {
-	return m.Base.StreamGenerateContent(ctx, request)
 }
