@@ -25,16 +25,15 @@ type FileRef struct {
 
 // LLMRequest represents a request to a language model.
 type LLMRequest struct {
-	Model              string                   `json:"model,omitempty"`
-	Contents           []*genai.Content         `json:"contents"`
-	Config             *genai.GenerationConfig  `json:"config,omitempty"`
-	LiveConnectConfig  *genai.LiveConnectConfig `json:"live_connect_config,omitempty"`
-	CountTokensConfig  *genai.CountTokensConfig `json:"count_tokens_config,omitempty"`
-	SystemInstructions []string                 `json:"system_instructions,omitempty"`
-	Tools              []*genai.Tool            `json:"tools,omitempty"`
-	ToolMap            map[string]*genai.Tool   `json:"tool_map,omitempty"`
-	SafetySettings     []*genai.SafetySetting   `json:"safety_settings,omitempty"`
-	OutputSchema       map[string]any           `json:"output_schema,omitempty"`
+	Model             string                       `json:"model,omitempty"`
+	Contents          []*genai.Content             `json:"contents"`
+	Config            *genai.GenerateContentConfig `json:"config,omitempty"`
+	LiveConnectConfig *genai.LiveConnectConfig     `json:"live_connect_config,omitempty"`
+	CountTokensConfig *genai.CountTokensConfig     `json:"count_tokens_config,omitempty"`
+	Tools             []*genai.Tool                `json:"tools,omitempty"`
+	ToolMap           map[string]*genai.Tool       `json:"tool_map,omitempty"`
+	SafetySettings    []*genai.SafetySetting       `json:"safety_settings,omitempty"`
+	OutputSchema      map[string]any               `json:"output_schema,omitempty"`
 }
 
 // NewLLMRequest creates a new LLMRequest.
@@ -45,10 +44,10 @@ func NewLLMRequest(contents []*genai.Content) *LLMRequest {
 }
 
 // UserContent creates a new user content.
-func UserContent(parts ...string) *genai.Content {
-	contentParts := make([]*genai.Part, 0, len(parts))
-	for _, part := range parts {
-		contentParts = append(contentParts, &genai.Part{Text: part})
+func UserContent(texts ...string) *genai.Content {
+	contentParts := make([]*genai.Part, len(texts))
+	for i, part := range texts {
+		contentParts[i] = &genai.Part{Text: part}
 	}
 	return &genai.Content{
 		Role:  "user",
@@ -57,10 +56,10 @@ func UserContent(parts ...string) *genai.Content {
 }
 
 // ModelContent creates a new model content.
-func ModelContent(parts ...string) *genai.Content {
-	contentParts := make([]*genai.Part, 0, len(parts))
-	for _, part := range parts {
-		contentParts = append(contentParts, &genai.Part{Text: part})
+func ModelContent(texts ...string) *genai.Content {
+	contentParts := make([]*genai.Part, len(texts))
+	for i, part := range texts {
+		contentParts[i] = &genai.Part{Text: part}
 	}
 	return &genai.Content{
 		Role:  "model",
@@ -70,8 +69,11 @@ func ModelContent(parts ...string) *genai.Content {
 
 // AppendInstructions adds system instructions to the request.
 func (r *LLMRequest) AppendInstructions(instructions ...string) *LLMRequest {
-	if r.CountTokensConfig.SystemInstruction == nil {
-		r.CountTokensConfig.SystemInstruction = &genai.Content{
+	if r.Config == nil {
+		r.Config = &genai.GenerateContentConfig{}
+	}
+	if r.Config.SystemInstruction == nil {
+		r.Config.SystemInstruction = &genai.Content{
 			Parts: []*genai.Part{
 				{
 					Text: strings.Join(instructions, "\n"),
@@ -81,9 +83,10 @@ func (r *LLMRequest) AppendInstructions(instructions ...string) *LLMRequest {
 		return r
 	}
 
-	r.CountTokensConfig.SystemInstruction.Parts = append(r.CountTokensConfig.SystemInstruction.Parts, &genai.Part{
+	r.Config.SystemInstruction.Parts = append(r.Config.SystemInstruction.Parts, &genai.Part{
 		Text: strings.Join(instructions, "\n"),
 	})
+
 	return r
 }
 
@@ -94,7 +97,7 @@ func (r *LLMRequest) AppendTools(tools ...*genai.Tool) *LLMRequest {
 }
 
 // WithGenerationConfig sets the generation configuration.
-func (r *LLMRequest) WithGenerationConfig(config *genai.GenerationConfig) *LLMRequest {
+func (r *LLMRequest) WithGenerationConfig(config *genai.GenerateContentConfig) *LLMRequest {
 	r.Config = config
 	return r
 }
@@ -115,7 +118,7 @@ func (r *LLMRequest) WithModelName(name string) *LLMRequest {
 func (r *LLMRequest) SetOutputSchema(schema map[string]any, mimeType string) *LLMRequest {
 	r.OutputSchema = schema
 	if r.Config == nil {
-		r.Config = &genai.GenerationConfig{}
+		r.Config = &genai.GenerateContentConfig{}
 	}
 	r.Config.ResponseMIMEType = mimeType
 	return r
