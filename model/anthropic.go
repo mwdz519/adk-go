@@ -201,19 +201,19 @@ func (m *Claude) GenerateContent(ctx context.Context, request *LLMRequest) (*LLM
 				})
 			}
 		}
-	}
 
-	// Add tools if provided
-	if len(request.Tools) > 0 && request.Tools[0].FunctionDeclarations != nil {
-		tools := make([]anthropic.ToolUnionParam, 0, len(request.Tools[0].FunctionDeclarations))
-		for _, funcDeclarations := range request.Tools[0].FunctionDeclarations {
-			toolUnion, err := m.funcDeclarationToToolParam(funcDeclarations)
-			if err != nil {
-				return nil, err
+		// Add tools if provided
+		if len(config.Tools) > 0 && config.Tools[0].FunctionDeclarations != nil {
+			tools := make([]anthropic.ToolUnionParam, 0, len(config.Tools[0].FunctionDeclarations))
+			for _, funcDeclarations := range config.Tools[0].FunctionDeclarations {
+				toolUnion, err := m.funcDeclarationToToolParam(funcDeclarations)
+				if err != nil {
+					return nil, err
+				}
+				tools = append(tools, toolUnion)
 			}
-			tools = append(tools, toolUnion)
+			params.Tools = tools
 		}
-		params.Tools = tools
 	}
 
 	if len(request.ToolMap) > 0 {
@@ -277,21 +277,21 @@ func (m *Claude) StreamGenerateContent(ctx context.Context, request *LLMRequest)
 					})
 				}
 			}
-		}
 
-		// Add tools if provided
-		if len(request.Tools) > 0 && request.Tools[0].FunctionDeclarations != nil {
-			tools := make([]anthropic.ToolUnionParam, 0, len(request.Tools[0].FunctionDeclarations))
-			for _, funcDeclarations := range request.Tools[0].FunctionDeclarations {
-				toolUnion, err := m.funcDeclarationToToolParam(funcDeclarations)
-				if err != nil {
-					if !yield(nil, err) {
-						return
+			// Add tools if provided
+			if len(config.Tools) > 0 && config.Tools[0].FunctionDeclarations != nil {
+				tools := make([]anthropic.ToolUnionParam, 0, len(config.Tools[0].FunctionDeclarations))
+				for _, funcDeclarations := range config.Tools[0].FunctionDeclarations {
+					toolUnion, err := m.funcDeclarationToToolParam(funcDeclarations)
+					if err != nil {
+						if !yield(nil, err) {
+							return
+						}
 					}
+					tools = append(tools, toolUnion)
 				}
-				tools = append(tools, toolUnion)
+				params.Tools = tools
 			}
-			params.Tools = tools
 		}
 
 		if len(request.ToolMap) > 0 {

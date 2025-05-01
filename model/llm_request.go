@@ -29,10 +29,7 @@ type LLMRequest struct {
 	Contents          []*genai.Content             `json:"contents"`
 	Config            *genai.GenerateContentConfig `json:"config,omitempty"`
 	LiveConnectConfig *genai.LiveConnectConfig     `json:"live_connect_config,omitempty"`
-	CountTokensConfig *genai.CountTokensConfig     `json:"count_tokens_config,omitempty"`
-	Tools             []*genai.Tool                `json:"tools,omitempty"`
 	ToolMap           map[string]*genai.Tool       `json:"tool_map,omitempty"`
-	SafetySettings    []*genai.SafetySetting       `json:"safety_settings,omitempty"`
 	OutputSchema      map[string]any               `json:"output_schema,omitempty"`
 }
 
@@ -92,7 +89,10 @@ func (r *LLMRequest) AppendInstructions(instructions ...string) *LLMRequest {
 
 // AppendTools adds tools to the request.
 func (r *LLMRequest) AppendTools(tools ...*genai.Tool) *LLMRequest {
-	r.Tools = append(r.Tools, tools...)
+	if r.Config == nil {
+		r.Config = &genai.GenerateContentConfig{}
+	}
+	r.Config.Tools = append(r.Config.Tools, tools...)
 	return r
 }
 
@@ -104,7 +104,10 @@ func (r *LLMRequest) WithGenerationConfig(config *genai.GenerateContentConfig) *
 
 // WithSafetySettings sets the safety settings.
 func (r *LLMRequest) WithSafetySettings(settings ...*genai.SafetySetting) *LLMRequest {
-	r.SafetySettings = append(r.SafetySettings, settings...)
+	if r.Config == nil {
+		r.Config = &genai.GenerateContentConfig{}
+	}
+	r.Config.SafetySettings = append(r.Config.SafetySettings, settings...)
 	return r
 }
 
@@ -131,41 +134,6 @@ func (r *LLMRequest) ToJSON() (string, error) {
 		return "", fmt.Errorf("failed to marshal LLMRequest to JSON: %w", err)
 	}
 	return string(bytes), nil
-}
-
-// ToGenerateContentConfig converts the LLMRequest to a genai.GenerateContentConfig.
-func (r *LLMRequest) ToGenerateContentConfig() *genai.GenerateContentConfig {
-	config := &genai.GenerateContentConfig{}
-
-	if r.Config != nil {
-		// Add required fields
-		config.MaxOutputTokens = int32(r.Config.MaxOutputTokens)
-		config.StopSequences = r.Config.StopSequences
-
-		// Add optional fields
-		if *r.Config.Temperature > 0 {
-			config.Temperature = r.Config.Temperature
-		}
-
-		if *r.Config.TopK > 0 {
-			config.TopK = r.Config.TopK
-		}
-
-		if *r.Config.TopP > 0 {
-			config.TopP = r.Config.TopP
-		}
-
-		if r.Config.CandidateCount > 0 {
-			config.CandidateCount = int32(r.Config.CandidateCount)
-		}
-	}
-
-	// Skip safety settings conversion for now due to type mismatch
-
-	// Note: SystemInstructions might not be directly supported in the genai package
-	// We might need to add them as a special content part instead
-
-	return config
 }
 
 // ToGenaiContents converts the LLMRequest contents to genai.Content slice.
