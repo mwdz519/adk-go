@@ -1,7 +1,7 @@
 // Copyright 2025 The Go A2A Authors
 // SPDX-License-Identifier: Apache-2.0
 
-package model
+package model_test
 
 import (
 	"os"
@@ -10,20 +10,22 @@ import (
 
 	anthropic "github.com/anthropics/anthropic-sdk-go"
 	"google.golang.org/genai"
+
+	"github.com/go-a2a/adk-go/model"
 )
 
 func TestClaude_Generate(t *testing.T) {
 	t.Skip()
 
-	claude, err := NewClaude(t.Context(), os.Getenv(EnvAnthropicAPIKey), anthropic.ModelClaude3_7SonnetLatest)
+	claude, err := model.NewClaude(t.Context(), os.Getenv(model.EnvAnthropicAPIKey), anthropic.ModelClaude3_7SonnetLatest)
 	if err != nil {
 		t.Fatalf("NewClaude: %v", err)
 	}
 
-	req := &LLMRequest{
+	req := &model.LLMRequest{
 		Contents: []*genai.Content{
 			{
-				Role: RoleUser,
+				Role: model.RoleUser,
 				Parts: []*genai.Part{
 					genai.NewPartFromText(`Handle the requests as specified in the System Instruction.`),
 				},
@@ -44,15 +46,15 @@ func TestClaude_Generate(t *testing.T) {
 func TestClaude_StreamGenerate_UnarySuccess(t *testing.T) {
 	t.Skip()
 
-	claude, err := NewClaude(t.Context(), os.Getenv(EnvAnthropicAPIKey), anthropic.ModelClaude3_7SonnetLatest)
+	claude, err := model.NewClaude(t.Context(), os.Getenv(model.EnvAnthropicAPIKey), anthropic.ModelClaude3_7SonnetLatest)
 	if err != nil {
 		t.Fatalf("NewClaude: %v", err)
 	}
 
-	req := &LLMRequest{
+	req := &model.LLMRequest{
 		Contents: []*genai.Content{
 			{
-				Role: RoleUser,
+				Role: model.RoleUser,
 				Parts: []*genai.Part{
 					genai.NewPartFromText(`Handle the requests as specified in the System Instruction.`),
 				},
@@ -60,7 +62,7 @@ func TestClaude_StreamGenerate_UnarySuccess(t *testing.T) {
 		},
 	}
 	seq := claude.StreamGenerateContent(t.Context(), req)
-	var got []*LLMResponse
+	var got []*model.LLMResponse
 	for r, err := range seq {
 		if err != nil {
 			t.Fatalf("unexpected error on StreamGenerate: %v", err)
@@ -83,15 +85,15 @@ func TestClaude_StreamGenerate_UnarySuccess(t *testing.T) {
 func TestClaude_StreamGenerate_StreamAggregation(t *testing.T) {
 	t.Skip()
 
-	claude, err := NewClaude(t.Context(), os.Getenv(EnvAnthropicAPIKey), anthropic.ModelClaude3_7SonnetLatest)
+	claude, err := model.NewClaude(t.Context(), os.Getenv(model.EnvAnthropicAPIKey), anthropic.ModelClaude3_7SonnetLatest)
 	if err != nil {
 		t.Fatalf("NewClaude: %v", err)
 	}
 
-	req := &LLMRequest{
+	req := &model.LLMRequest{
 		Contents: []*genai.Content{
 			{
-				Role: RoleUser,
+				Role: model.RoleUser,
 				Parts: []*genai.Part{
 					genai.NewPartFromText(`Handle the requests as specified in the System Instruction.`),
 				},
