@@ -194,18 +194,26 @@ func (m *Claude) GenerateContent(ctx context.Context, request *LLMRequest) (*LLM
 			params.TopP = anthropic.Float(float64(*config.TopP))
 		}
 
-		// Add tools if provided
-		if len(request.Tools) > 0 && request.Tools[0].FunctionDeclarations != nil {
-			tools := make([]anthropic.ToolUnionParam, 0, len(request.Tools[0].FunctionDeclarations))
-			for _, funcDeclarations := range request.Tools[0].FunctionDeclarations {
-				toolUnion, err := m.funcDeclarationToToolParam(funcDeclarations)
-				if err != nil {
-					return nil, err
-				}
-				tools = append(tools, toolUnion)
+		if config.SystemInstruction != nil {
+			for _, instruction := range config.SystemInstruction.Parts {
+				params.System = append(params.System, anthropic.TextBlockParam{
+					Text: instruction.Text,
+				})
 			}
-			params.Tools = tools
 		}
+	}
+
+	// Add tools if provided
+	if len(request.Tools) > 0 && request.Tools[0].FunctionDeclarations != nil {
+		tools := make([]anthropic.ToolUnionParam, 0, len(request.Tools[0].FunctionDeclarations))
+		for _, funcDeclarations := range request.Tools[0].FunctionDeclarations {
+			toolUnion, err := m.funcDeclarationToToolParam(funcDeclarations)
+			if err != nil {
+				return nil, err
+			}
+			tools = append(tools, toolUnion)
+		}
+		params.Tools = tools
 	}
 
 	if len(request.ToolMap) > 0 {
@@ -216,14 +224,6 @@ func (m *Claude) GenerateContent(ctx context.Context, request *LLMRequest) (*LLM
 			},
 		}
 		params.ToolChoice = toolchoice
-	}
-
-	if len(request.SystemInstructions) > 0 {
-		for _, instruction := range request.SystemInstructions {
-			params.System = append(params.System, anthropic.TextBlockParam{
-				Text: instruction,
-			})
-		}
 	}
 
 	// Make API call
@@ -269,6 +269,14 @@ func (m *Claude) StreamGenerateContent(ctx context.Context, request *LLMRequest)
 			if config.TopP != nil {
 				params.TopP = anthropic.Float(float64(*config.TopP))
 			}
+
+			if config.SystemInstruction != nil {
+				for _, instruction := range config.SystemInstruction.Parts {
+					params.System = append(params.System, anthropic.TextBlockParam{
+						Text: instruction.Text,
+					})
+				}
+			}
 		}
 
 		// Add tools if provided
@@ -294,14 +302,6 @@ func (m *Claude) StreamGenerateContent(ctx context.Context, request *LLMRequest)
 				},
 			}
 			params.ToolChoice = toolchoice
-		}
-
-		if len(request.SystemInstructions) > 0 {
-			for _, instruction := range request.SystemInstructions {
-				params.System = append(params.System, anthropic.TextBlockParam{
-					Text: instruction,
-				})
-			}
 		}
 
 		// Make streaming API call - stream parameter is added by the method
