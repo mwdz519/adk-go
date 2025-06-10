@@ -7,6 +7,8 @@ import (
 	"context"
 	"fmt"
 	"strings"
+
+	"github.com/go-a2a/adk-go/types"
 )
 
 // ModelType represents a type of model.
@@ -15,14 +17,18 @@ type ModelType = string
 const (
 	// ModelTypeGemini represents Gemini models.
 	ModelTypeGemini ModelType = "gemini"
+
 	// ModelTypeClaude represents Claude models.
 	ModelTypeClaude ModelType = "claude"
+
+	// ModelTypeClaudeVertex represents Claude Vertex AI models.
+	ModelTypeClaudeVertexAI ModelType = "claude-vertex-ai"
 )
 
 // ModelFactory creates models.
 type ModelFactory interface {
 	// CreateModel creates a model with the specified name.
-	CreateModel(ctx context.Context, modelName string) (Model, error)
+	CreateModel(ctx context.Context, modelName string) (types.Model, error)
 }
 
 // DefaultModelFactory is the default implementation of ModelFactory.
@@ -40,9 +46,9 @@ func NewModelFactory(apiKey string) ModelFactory {
 }
 
 // CreateModel creates a model with the specified name.
-func (f *DefaultModelFactory) CreateModel(ctx context.Context, modelName string) (Model, error) {
+func (f *DefaultModelFactory) CreateModel(ctx context.Context, modelName string) (types.Model, error) {
 	// First try using the registry for more flexible pattern matching
-	model, err := NewLLM(ctx, f.apiKey, modelName)
+	model, err := NewLLM(ctx, modelName)
 	if err == nil {
 		return model, nil
 	}
@@ -54,7 +60,9 @@ func (f *DefaultModelFactory) CreateModel(ctx context.Context, modelName string)
 	case ModelTypeGemini:
 		return NewGemini(ctx, f.apiKey, modelName)
 	case ModelTypeClaude:
-		return NewClaude(ctx, f.apiKey, modelName)
+		return NewClaude(ctx, modelName, ClaudeModeAnthropic)
+	case ModelTypeClaudeVertexAI:
+		return NewClaude(ctx, modelName, ClaudeModeVertexAI)
 	default:
 		return nil, fmt.Errorf("unsupported model: %s", modelName)
 	}

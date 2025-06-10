@@ -1,15 +1,14 @@
 // Copyright 2025 The Go A2A Authors
 // SPDX-License-Identifier: Apache-2.0
 
-package model
+package types
 
 import (
 	"google.golang.org/genai"
 )
 
-// LLMResponse represents a response from a language model.
-// It provides structured access to content, errors, and metadata
-// from the model's response.
+// LLMResponse represents a LLM response class that provides the first candidate response from the
+// model if available. Otherwise, returns error code and message.
 type LLMResponse struct {
 	// Content is the content of the response.
 	Content *genai.Content
@@ -20,8 +19,6 @@ type LLMResponse struct {
 	// Partial indicates whether the text content is part of an unfinished text stream.
 	// Only used for streaming mode and when the content is plain text.
 	Partial bool
-
-	FinishReason genai.FinishReason
 
 	// TurnComplete indicates whether the response from the model is complete.
 	// Only used for streaming mode.
@@ -37,12 +34,14 @@ type LLMResponse struct {
 	// Usually it's due to user interruption during a bidirectional streaming.
 	Interrupted bool
 
-	UsageMetadata *genai.GenerateContentResponseUsageMetadata
-
 	// CustomMetadata is the custom metadata of the LLMResponse.
 	// An optional key-value pair to label an LLMResponse.
 	// The entire map must be JSON serializable.
 	CustomMetadata map[string]any
+
+	FinishReason genai.FinishReason
+
+	UsageMetadata *genai.GenerateContentResponseUsageMetadata
 }
 
 // CreateLLMResponse creates an [LLMResponse] from a [*genai.GenerateContentResponse].
@@ -72,8 +71,7 @@ func CreateLLMResponse(resp *genai.GenerateContentResponse) *LLMResponse {
 		// Handle safety ratings if available
 		blockReason := "UNKNOWN_BLOCK"
 		blockMessage := "Content was blocked. Check prompt feedback for details."
-
-		if safety := promptFeedback.SafetyRatings; safety != nil && len(safety) > 0 {
+		if safety := promptFeedback.SafetyRatings; len(safety) > 0 {
 			for _, rating := range safety {
 				if rating.Blocked {
 					blockReason = string(rating.Category)
@@ -84,13 +82,12 @@ func CreateLLMResponse(resp *genai.GenerateContentResponse) *LLMResponse {
 				}
 			}
 		}
-
 		response.ErrorCode = blockReason
 		response.ErrorMessage = blockMessage
 
 	default:
 		response.ErrorCode = "UNKNOWN_ERROR"
-		response.ErrorMessage = "Unknown error in generate content response."
+		response.ErrorMessage = "Unknown error"
 	}
 
 	return response

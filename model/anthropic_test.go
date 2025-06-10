@@ -11,17 +11,18 @@ import (
 	"google.golang.org/genai"
 
 	"github.com/go-a2a/adk-go/model"
+	"github.com/go-a2a/adk-go/types"
 )
 
 func TestClaude_Generate(t *testing.T) {
 	t.Skip()
 
-	claude, err := model.NewClaude(t.Context(), anthropic.ModelClaude3_7SonnetLatest, model.ClaudeModeAnthropic)
+	claude, err := model.NewClaude(t.Context(), string(anthropic.ModelClaude3_7SonnetLatest), model.ClaudeModeAnthropic)
 	if err != nil {
 		t.Fatalf("NewClaude: %v", err)
 	}
 
-	req := &model.LLMRequest{
+	req := &types.LLMRequest{
 		Contents: []*genai.Content{
 			{
 				Role: model.RoleUser,
@@ -45,12 +46,12 @@ func TestClaude_Generate(t *testing.T) {
 func TestClaude_StreamGenerate_UnarySuccess(t *testing.T) {
 	t.Skip()
 
-	claude, err := model.NewClaude(t.Context(), anthropic.ModelClaude3_7SonnetLatest, model.ClaudeModeAnthropic)
+	claude, err := model.NewClaude(t.Context(), string(anthropic.ModelClaude3_7SonnetLatest), model.ClaudeModeAnthropic)
 	if err != nil {
 		t.Fatalf("NewClaude: %v", err)
 	}
 
-	req := &model.LLMRequest{
+	req := &types.LLMRequest{
 		Contents: []*genai.Content{
 			{
 				Role: model.RoleUser,
@@ -61,7 +62,7 @@ func TestClaude_StreamGenerate_UnarySuccess(t *testing.T) {
 		},
 	}
 	seq := claude.StreamGenerateContent(t.Context(), req)
-	var got []*model.LLMResponse
+	var got []*types.LLMResponse
 	for r, err := range seq {
 		if err != nil {
 			t.Fatalf("unexpected error on StreamGenerate: %v", err)
@@ -84,12 +85,12 @@ func TestClaude_StreamGenerate_UnarySuccess(t *testing.T) {
 func TestClaude_StreamGenerate_StreamAggregation(t *testing.T) {
 	t.Skip()
 
-	claude, err := model.NewClaude(t.Context(), anthropic.ModelClaude3_7SonnetLatest, model.ClaudeModeAnthropic)
+	claude, err := model.NewClaude(t.Context(), string(anthropic.ModelClaude3_7SonnetLatest), model.ClaudeModeAnthropic)
 	if err != nil {
 		t.Fatalf("NewClaude: %v", err)
 	}
 
-	req := &model.LLMRequest{
+	req := &types.LLMRequest{
 		Contents: []*genai.Content{
 			{
 				Role: model.RoleUser,

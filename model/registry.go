@@ -8,6 +8,8 @@ import (
 	"fmt"
 	"regexp"
 	"sync"
+
+	"github.com/go-a2a/adk-go/types"
 )
 
 // init registers the built-in model types.
@@ -17,8 +19,8 @@ func init() {
 		[]string{
 			`claude-.*`, // General pattern for Claude models
 		},
-		func(ctx context.Context, apiKey string, modelName string) (Model, error) {
-			return NewClaude(ctx, apiKey, modelName)
+		func(ctx context.Context, apiKey, modelName string) (types.Model, error) {
+			return NewClaude(ctx, modelName, ClaudeModeAnthropic)
 		},
 	)
 
@@ -29,14 +31,14 @@ func init() {
 			`projects\/.*\/locations\/.*\/endpoints\/.*`,
 			`projects\/.*\/locations\/.*\/publishers\/google\/models\/gemini-.*`,
 		},
-		func(ctx context.Context, apiKey string, modelName string) (Model, error) {
+		func(ctx context.Context, apiKey, modelName string) (types.Model, error) {
 			return NewGemini(ctx, apiKey, modelName)
 		},
 	)
 }
 
 // ModelCreatorFunc is a function type that creates a model instance.
-type ModelCreatorFunc func(ctx context.Context, apiKey string, modelName string) (Model, error)
+type ModelCreatorFunc func(ctx context.Context, apiKey, modelName string) (types.Model, error)
 
 // modelEntry represents a registry entry with a regex pattern and model creator function.
 type modelEntry struct {
@@ -143,13 +145,14 @@ func (r *LLMRegistry) ResolveLLM(modelName string) (ModelCreatorFunc, error) {
 
 // NewLLM creates a new LLM instance for the given model name.
 // It resolves the appropriate model implementation and creates an instance.
-func (r *LLMRegistry) NewLLM(ctx context.Context, apiKey string, modelName string) (Model, error) {
+func (r *LLMRegistry) NewLLM(ctx context.Context, modelName string) (types.Model, error) {
 	creator, err := r.ResolveLLM(modelName)
 	if err != nil {
 		return nil, err
 	}
 
-	return creator(ctx, apiKey, modelName)
+	// TODO(zchee): fill arg
+	return creator(ctx, "", modelName)
 }
 
 // RegisterLLM is a convenience function to register a model pattern.
@@ -166,6 +169,7 @@ func RegisterLLMType(patterns []string, creator ModelCreatorFunc) {
 }
 
 // NewLLM is a convenience function to create a new LLM instance.
-func NewLLM(ctx context.Context, apiKey string, modelName string) (Model, error) {
-	return GetRegistry().NewLLM(ctx, apiKey, modelName)
+func NewLLM(ctx context.Context, modelName string) (types.Model, error) {
+	// TODO(zchee): fill arg
+	return GetRegistry().NewLLM(ctx, modelName)
 }

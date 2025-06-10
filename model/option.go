@@ -12,9 +12,6 @@ import (
 // Config represents a base implementation of a Large Language Model.
 // It's an equivalent of the Python ADK BaseLlm class.
 type Config struct {
-	// model represents the specific LLM model name.
-	model string
-
 	// generationConfig contains configuration for generation.
 	generationConfig *genai.GenerationConfig
 
@@ -25,14 +22,20 @@ type Config struct {
 	logger *slog.Logger
 }
 
+func newConfig() Config {
+	return Config{
+		logger: slog.Default(),
+	}
+}
+
 // Option is a function that modifies the [Config] model.
 type Option interface {
-	apply(base *Config) *Config
+	apply(base Config) Config
 }
 
 type generationConfigOption struct{ *genai.GenerationConfig }
 
-func (o generationConfigOption) apply(base *Config) *Config {
+func (o generationConfigOption) apply(base Config) Config {
 	base.generationConfig = o.GenerationConfig
 	return base
 }
@@ -44,8 +47,8 @@ func WithGenerationConfig(config *genai.GenerationConfig) Option {
 
 type safetySettingOption []*genai.SafetySetting
 
-func (o safetySettingOption) apply(base *Config) *Config {
-	base.safetySettings = o
+func (o safetySettingOption) apply(base Config) Config {
+	base.safetySettings = append(base.safetySettings, o...)
 	return base
 }
 
@@ -56,7 +59,7 @@ func WithSafetySettings(settings []*genai.SafetySetting) Option {
 
 type loggerOption struct{ *slog.Logger }
 
-func (o loggerOption) apply(base *Config) *Config {
+func (o loggerOption) apply(base Config) Config {
 	base.logger = o.Logger
 	return base
 }
