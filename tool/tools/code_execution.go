@@ -291,7 +291,7 @@ func (t *CodeExecutionTool) formatResult(result *types.CodeExecutionResult) map[
 // ProcessLLMRequest implements [types.Tool].
 //
 // This method can be used to automatically add code execution capabilities to LLM requests.
-func (t *CodeExecutionTool) ProcessLLMRequest(ctx context.Context, toolCtx *types.ToolContext, llmRequest *types.LLMRequest) {
+func (t *CodeExecutionTool) ProcessLLMRequest(ctx context.Context, toolCtx *types.ToolContext, llmRequest *types.LLMRequest) error {
 	// Check if the model supports built-in code execution
 	if t.shouldUseBuiltInExecution(llmRequest.Model) {
 		// Add built-in code execution tool
@@ -303,11 +303,11 @@ func (t *CodeExecutionTool) ProcessLLMRequest(ctx context.Context, toolCtx *type
 		llmRequest.Config.Tools = append(llmRequest.Config.Tools, &genai.Tool{
 			CodeExecution: &genai.ToolCodeExecution{},
 		})
-		return
+		return nil
 	}
 
 	// Otherwise, use the standard tool processing
-	t.Tool.ProcessLLMRequest(ctx, toolCtx, llmRequest)
+	return t.Tool.ProcessLLMRequest(ctx, toolCtx, llmRequest)
 }
 
 // shouldUseBuiltInExecution checks if the model supports built-in code execution.

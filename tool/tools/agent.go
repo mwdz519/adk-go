@@ -67,6 +67,6 @@ func (t *Agent) Run(ctx context.Context, args map[string]any, toolCtx *types.Too
 }
 
 // ProcessLLMRequest implements [types.Tool].
-func (t *Agent) ProcessLLMRequest(ctx context.Context, toolCtx *types.ToolContext, request *types.LLMRequest) {
-	t.Tool.ProcessLLMRequest(ctx, toolCtx, request)
+func (t *Agent) ProcessLLMRequest(ctx context.Context, toolCtx *types.ToolContext, request *types.LLMRequest) error {
+	return t.Tool.ProcessLLMRequest(ctx, toolCtx, request)
 }

@@ -62,10 +62,10 @@ func (t *Tool) Run(ctx context.Context, args map[string]any, toolCtx *types.Tool
 }
 
 // ProcessLLMRequest implements [types.Tool].
-func (t *Tool) ProcessLLMRequest(ctx context.Context, toolCtx *types.ToolContext, request *types.LLMRequest) {
+func (t *Tool) ProcessLLMRequest(ctx context.Context, toolCtx *types.ToolContext, request *types.LLMRequest) error {
 	funcDeclaration := t.GetDeclaration()
 	if funcDeclaration == nil {
-		return
+		return nil
 	}
 
 	request.ToolMap[t.Name()] = t
@@ -74,7 +74,7 @@ func (t *Tool) ProcessLLMRequest(ctx context.Context, toolCtx *types.ToolContext
 		if len(toolWithFuncDeclarations.FunctionDeclarations) == 0 {
 			toolWithFuncDeclarations.FunctionDeclarations = append(toolWithFuncDeclarations.FunctionDeclarations, funcDeclaration)
 		}
-		return
+		return nil
 	}
 
 	if request.Config == nil {
@@ -85,6 +85,8 @@ func (t *Tool) ProcessLLMRequest(ctx context.Context, toolCtx *types.ToolContext
 			funcDeclaration,
 		},
 	})
+
+	return nil
 }
 
 func (t *Tool) findToolWithFunctionDeclarations(request *types.LLMRequest) *genai.Tool {

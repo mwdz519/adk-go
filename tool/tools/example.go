@@ -67,10 +67,10 @@ func (t *ExampleTool[T]) Run(context.Context, map[string]any, *types.ToolContext
 }
 
 // ProcessLLMRequest implements [types.Tool].
-func (t *ExampleTool[T]) ProcessLLMRequest(ctx context.Context, toolCtx *types.ToolContext, request *types.LLMRequest) {
+func (t *ExampleTool[T]) ProcessLLMRequest(ctx context.Context, toolCtx *types.ToolContext, request *types.LLMRequest) error {
 	parts := toolCtx.UserContent().Parts
 	if len(parts) == 0 || parts[0].Text == "" {
-		return
+		return nil
 	}
 
 	instructions, err := example.BuildExampleSI(ctx, t.examples, parts[0].Text, request.Model)
@@ -78,4 +78,6 @@ func (t *ExampleTool[T]) ProcessLLMRequest(ctx context.Context, toolCtx *types.T
 		panic(err)
 	}
 	request.AppendInstructions(instructions)
+
+	return nil
 }

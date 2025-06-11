@@ -76,6 +76,6 @@ func (t *FunctionTool) Run(ctx context.Context, args map[string]any, toolCtx *ty
 }
 
 // ProcessLLMRequest implements [types.Tool].
-func (t *FunctionTool) ProcessLLMRequest(ctx context.Context, toolCtx *types.ToolContext, request *types.LLMRequest) {
-	t.Tool.ProcessLLMRequest(ctx, toolCtx, request)
+func (t *FunctionTool) ProcessLLMRequest(ctx context.Context, toolCtx *types.ToolContext, request *types.LLMRequest) error {
+	return t.Tool.ProcessLLMRequest(ctx, toolCtx, request)
 }
