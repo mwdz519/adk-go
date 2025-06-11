@@ -15,6 +15,7 @@ import (
 	"slices"
 	"strings"
 
+	aiplatform "cloud.google.com/go/aiplatform/apiv1"
 	anthropic "github.com/anthropics/anthropic-sdk-go"
 	anthropic_bedrock "github.com/anthropics/anthropic-sdk-go/bedrock"
 	anthropic_option "github.com/anthropics/anthropic-sdk-go/option"
@@ -272,11 +273,7 @@ func NewClaude(ctx context.Context, modelName string, mode ClaudeMode, opts ...O
 		if projectID == "" {
 			return nil, fmt.Errorf("%q is required", "GOOGLE_CLOUD_PROJECT")
 		}
-		// https://pkg.go.dev/cloud.google.com/go/aiplatform/apiv1#DefaultAuthScopes
-		scopes := []string{
-			"https://www.googleapis.com/auth/cloud-platform",
-			"https://www.googleapis.com/auth/cloud-platform.read-only",
-		}
+		scopes := aiplatform.DefaultAuthScopes()
 		ropts = append(ropts, anthropic_vertex.WithGoogleAuth(ctx, region, projectID, scopes...))
 
 	case ClaudeModeBedrock:
