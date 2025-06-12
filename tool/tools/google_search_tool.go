@@ -8,9 +8,10 @@ import (
 	"errors"
 	"fmt"
 
+	"google.golang.org/genai"
+
 	"github.com/go-a2a/adk-go/tool"
 	"github.com/go-a2a/adk-go/types"
-	"google.golang.org/genai"
 )
 
 // GoogleSearchTool represents a built-in tool that is automatically invoked by Gemini 2 models to retrieve search results from Google Search.

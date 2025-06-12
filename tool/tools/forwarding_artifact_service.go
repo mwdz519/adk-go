@@ -7,8 +7,9 @@ import (
 	"context"
 	"errors"
 
-	"github.com/go-a2a/adk-go/types"
 	"google.golang.org/genai"
+
+	"github.com/go-a2a/adk-go/types"
 )
 
 // ForwardingArtifactService represents an artifact service that forwards to the parent tool context.
