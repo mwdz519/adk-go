@@ -51,6 +51,11 @@ func (t *Tool) IsLongRunning() bool {
 	return t.isLongRunning
 }
 
+// SetLongRunning sets thether the isLongRunning.
+func (t *Tool) SetLongRunning(longRunning bool) {
+	t.isLongRunning = longRunning
+}
+
 // GetDeclaration implements [types.Tool].
 func (t *Tool) GetDeclaration() *genai.FunctionDeclaration {
 	return nil
