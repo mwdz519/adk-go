@@ -28,5 +28,5 @@ type Tool interface {
 	Run(ctx context.Context, args map[string]any, toolCtx *ToolContext) (any, error)
 
 	// ProcessLLMRequest processes the outgoing LLM request for this tool.
-	ProcessLLMRequest(ctx context.Context, toolCtx *ToolContext, llmRequest *LLMRequest) error
+	ProcessLLMRequest(ctx context.Context, toolCtx *ToolContext, request *LLMRequest) error
 }
