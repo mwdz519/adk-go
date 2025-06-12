@@ -15,7 +15,7 @@ import (
 	"slices"
 	"strings"
 
-	aiplatform "cloud.google.com/go/aiplatform/apiv1"
+	aiplatform "cloud.google.com/go/aiplatform/apiv1beta1"
 	anthropic "github.com/anthropics/anthropic-sdk-go"
 	anthropic_bedrock "github.com/anthropics/anthropic-sdk-go/bedrock"
 	anthropic_option "github.com/anthropics/anthropic-sdk-go/option"
