@@ -5,27 +5,22 @@ package memory
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"log/slog"
 	"os"
 	"strings"
+	"time"
 
-	aiplatform "cloud.google.com/go/aiplatform/apiv1beta1"
-	"cloud.google.com/go/aiplatform/apiv1beta1/aiplatformpb"
-	"cloud.google.com/go/auth/credentials"
-	"cloud.google.com/go/storage"
 	"github.com/go-json-experiment/json"
-	"google.golang.org/api/option"
 	"google.golang.org/genai"
 
+	ragclient "github.com/go-a2a/adk-go/internal/vertexai/preview/rag"
 	"github.com/go-a2a/adk-go/types"
 )
 
 // VertexAIRagService implements Service with Google Cloud Vertex AI RAG.
 type VertexAIRagService struct {
-	vertexRagClient         *aiplatform.VertexRagClient
-	vertexRagDataClient     *aiplatform.VertexRagDataClient
+	ragClient               *ragclient.Client
 	ragCorpus               string
 	similarityTopK          int
 	vectorDistanceThreshold float64
@@ -60,30 +55,14 @@ func WithVectorDistanceThreshold(threshold float64) VertexAIRagOption {
 }
 
 // NewVertexAIRagService creates a new VertexAIRagService.
-func NewVertexAIRagService(ctx context.Context, ragCorpus string, opts ...VertexAIRagOption) (*VertexAIRagService, error) {
-	creds, err := credentials.DetectDefault(&credentials.DetectOptions{
-		Scopes: []string{
-			storage.ScopeFullControl,
-			storage.ScopeReadWrite,
-		},
-	})
+func NewVertexAIRagService(ctx context.Context, projectID, location, ragCorpus string, opts ...VertexAIRagOption) (*VertexAIRagService, error) {
+	ragClient, err := ragclient.NewClient(ctx, projectID, location)
 	if err != nil {
-		return nil, fmt.Errorf("get credentials for storage: %w", err)
-	}
-
-	vertexRagClient, err := aiplatform.NewVertexRagClient(ctx, option.WithAuthCredentials(creds))
-	if err != nil {
-		return nil, err
-	}
-
-	vertexRagDataClient, err := aiplatform.NewVertexRagDataClient(ctx, option.WithAuthCredentials(creds))
-	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to create RAG client: %w", err)
 	}
 
 	s := &VertexAIRagService{
-		vertexRagClient:         vertexRagClient,
-		vertexRagDataClient:     vertexRagDataClient,
+		ragClient:               ragClient,
 		ragCorpus:               ragCorpus,
 		similarityTopK:          5,   // Default value
 		vectorDistanceThreshold: 0.7, // Default value
@@ -108,13 +87,9 @@ func NewVertexAIRagService(ctx context.Context, ragCorpus string, opts ...Vertex
 }
 
 // AddSessionToMemory implements [types.MemoryService].
-//
-// TODO(zchee): implements
 func (s *VertexAIRagService) AddSessionToMemory(ctx context.Context, session types.Session) error {
-	return errors.New("not implemented: Vertex AI RAG integration requires additional dependencies")
-
 	if len(s.vertexRAGStore.RAGResources) == 0 {
-		return errors.New("rag resources must be set")
+		return fmt.Errorf("rag resources must be set")
 	}
 
 	s.logger.InfoContext(ctx, "Adding session to Vertex AI RAG memory",
@@ -124,18 +99,21 @@ func (s *VertexAIRagService) AddSessionToMemory(ctx context.Context, session typ
 		slog.String("rag_corpus", s.ragCorpus),
 	)
 
-	tempfile, err := os.CreateTemp(os.TempDir(), "*.txt")
+	// Create temporary file with session content
+	tempfile, err := os.CreateTemp(os.TempDir(), "session-*.txt")
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to create temporary file: %w", err)
 	}
 	defer os.Remove(tempfile.Name())
 
-	outputLines := []string{}
+	// Extract text content from session events
+	var outputLines []string
 	for _, event := range session.Events() {
 		if event.Content == nil || len(event.Content.Parts) == 0 {
 			continue
 		}
-		textParts := make([]string, 0, len(event.Content.Parts))
+
+		var textParts []string
 		for _, part := range event.Content.Parts {
 			if part.Text != "" {
 				text := strings.ReplaceAll(part.Text, "\n", " ")
@@ -144,47 +122,68 @@ func (s *VertexAIRagService) AddSessionToMemory(ctx context.Context, session typ
 		}
 
 		if len(textParts) > 0 {
-			m := map[string]any{
-				"author":    event.Author,
-				"timestamp": event.Timestamp,
-				"text":      strings.Join(textParts, "."),
+			eventData := map[string]any{
+				"author":     event.Author,
+				"timestamp":  event.Timestamp.Format("2006-01-02T15:04:05Z07:00"),
+				"text":       strings.Join(textParts, ". "),
+				"app_name":   session.AppName(),
+				"user_id":    session.UserID(),
+				"session_id": session.ID(),
 			}
-			data, err := json.Marshal(m)
+
+			data, err := json.Marshal(eventData)
 			if err != nil {
-				return err
+				return fmt.Errorf("failed to marshal event data: %w", err)
 			}
 			outputLines = append(outputLines, string(data))
 		}
 	}
 
-	outputString := strings.Join(outputLines, "\n")
-	if _, err := tempfile.WriteString(outputString); err != nil {
-		return err
+	if len(outputLines) == 0 {
+		s.logger.InfoContext(ctx, "No text content found in session, skipping upload")
+		return nil
 	}
 
-	for _, ragResources := range s.vertexRAGStore.RAGResources {
-		// TODO(zchee): set path=temp_file_path,
-		_ = ragResources
-		req := &aiplatformpb.UploadRagFileRequest{
-			RagFile: &aiplatformpb.RagFile{
-				RagFileSource: &aiplatformpb.RagFile_DirectUploadSource{
-					DirectUploadSource: &aiplatformpb.DirectUploadSource{},
-				},
-				DisplayName: fmt.Sprintf("%s.%s.%s", session.AppName(), session.UserID(), session.ID()),
-			},
-		}
-		s.vertexRagDataClient.UploadRagFile(ctx, req)
+	// Write session content to temporary file
+	outputString := strings.Join(outputLines, "\n")
+	if _, err := tempfile.WriteString(outputString); err != nil {
+		return fmt.Errorf("failed to write to temporary file: %w", err)
 	}
+
+	if err := tempfile.Close(); err != nil {
+		return fmt.Errorf("failed to close temporary file: %w", err)
+	}
+
+	// Upload file to RAG corpus using new internal client
+	ragFile := &ragclient.RagFile{
+		DisplayName: fmt.Sprintf("session-%s-%s-%s", session.AppName(), session.UserID(), session.ID()),
+		Description: fmt.Sprintf("Session data for app %s, user %s, session %s", session.AppName(), session.UserID(), session.ID()),
+		RagFileSource: &ragclient.RagFileSource{
+			DirectUploadSource: &ragclient.DirectUploadSource{},
+		},
+	}
+
+	uploadConfig := &ragclient.UploadRagFileConfig{
+		ChunkSize:    1000, // Default chunk size
+		ChunkOverlap: 100,  // Default overlap
+	}
+
+	uploadedFile, err := s.ragClient.UploadFile(ctx, s.ragCorpus, ragFile, uploadConfig)
+	if err != nil {
+		return fmt.Errorf("failed to upload session file to RAG corpus: %w", err)
+	}
+
+	s.logger.InfoContext(ctx, "Session added to Vertex AI RAG memory successfully",
+		slog.String("file_name", uploadedFile.Name),
+		slog.String("display_name", uploadedFile.DisplayName),
+		slog.Int64("size_bytes", uploadedFile.SizeBytes),
+	)
 
 	return nil
 }
 
 // SearchMemory implements [types.MemoryService].
-//
-// TODO(zchee): implements
 func (s *VertexAIRagService) SearchMemory(ctx context.Context, appName, userID, query string) (*types.SearchMemoryResponse, error) {
-	return nil, errors.New("not implemented: Vertex AI RAG integration requires additional dependencies")
-
 	s.logger.InfoContext(ctx, "Searching Vertex AI RAG memory",
 		slog.String("app_name", appName),
 		slog.String("user_id", userID),
@@ -192,11 +191,83 @@ func (s *VertexAIRagService) SearchMemory(ctx context.Context, appName, userID, 
 		slog.String("rag_corpus", s.ragCorpus),
 	)
 
-	// This would require integration with Google Cloud Vertex AI
-	// Implementation would involve:
-	// 1. Creating a search query for the RAG corpus
-	// 2. Retrieving matching documents
-	// 3. Converting documents to Result objects
+	// Perform semantic search using the new RAG client
+	searchReq := &ragclient.SearchRequest{
+		Query:                   query,
+		CorporaNames:            []string{s.ragCorpus},
+		TopK:                    int32(s.similarityTopK),
+		VectorDistanceThreshold: s.vectorDistanceThreshold,
+		Filters: map[string]any{
+			"app_name": appName,
+			"user_id":  userID,
+		},
+	}
 
-	return nil, nil
+	searchResp, err := s.ragClient.Search(ctx, searchReq)
+	if err != nil {
+		return nil, fmt.Errorf("failed to search RAG corpus: %w", err)
+	}
+
+	// Convert search results to memory entries
+	var memories []*types.MemoryEntry
+	for _, doc := range searchResp.Documents {
+		// Parse the document content back to extract event data
+		var eventData map[string]any
+		if err := json.Unmarshal([]byte(doc.Content), &eventData); err != nil {
+			// If parsing fails, treat the content as plain text
+			s.logger.WarnContext(ctx, "Failed to parse document as JSON, treating as plain text",
+				slog.String("error", err.Error()),
+			)
+
+			memory := &types.MemoryEntry{
+				Content: genai.NewContentFromText(doc.Content, genai.RoleUser),
+				Author:  "unknown",
+			}
+			memories = append(memories, memory)
+			continue
+		}
+
+		// Extract author and text from the parsed event data
+		author := "unknown"
+		if authorVal, ok := eventData["author"].(string); ok {
+			author = authorVal
+		}
+
+		text := ""
+		if textVal, ok := eventData["text"].(string); ok {
+			text = textVal
+		}
+
+		memory := &types.MemoryEntry{
+			Content: genai.NewContentFromText(text, genai.RoleUser),
+			Author:  author,
+		}
+
+		// Parse timestamp if available
+		if timestampStr, ok := eventData["timestamp"].(string); ok {
+			if timestamp, err := time.Parse("2006-01-02T15:04:05Z07:00", timestampStr); err == nil {
+				memory.Timestamp = timestamp
+			}
+		}
+
+		memories = append(memories, memory)
+	}
+
+	response := &types.SearchMemoryResponse{
+		Memories: memories,
+	}
+
+	s.logger.InfoContext(ctx, "Vertex AI RAG memory search completed",
+		slog.Int("results_count", len(memories)),
+	)
+
+	return response, nil
+}
+
+// Close closes the underlying RAG client and releases resources.
+func (s *VertexAIRagService) Close() error {
+	if s.ragClient != nil {
+		return s.ragClient.Close()
+	}
+	return nil
 }
