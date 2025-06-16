@@ -4,8 +4,10 @@
 package extension
 
 import (
-	"encoding/json"
+	"strings"
 	"time"
+
+	"cloud.google.com/go/aiplatform/apiv1beta1/aiplatformpb"
 )
 
 // Extension represents a Vertex AI extension with its configuration and metadata.
@@ -13,37 +15,47 @@ import (
 // Extensions enable models to connect to external APIs for real-time data processing
 // and performing real-world actions. Each extension is defined by its manifest which
 // includes API specifications, authentication configuration, and runtime settings.
+//
+// This type wraps the protobuf Extension type and adds additional fields for state
+// management and error handling that are specific to this ADK implementation.
 type Extension struct {
-	// ID is the unique identifier for the extension.
-	ID string `json:"id"`
+	// Embed the protobuf Extension type to get all the standard fields
+	*aiplatformpb.Extension
 
-	// Name is the resource name of the extension.
-	// Format: projects/{project}/locations/{location}/extensions/{extension_id}
-	Name string `json:"name"`
-
-	// DisplayName is the human-readable name of the extension.
-	DisplayName string `json:"display_name"`
-
-	// Description provides details about the extension's purpose and functionality.
-	Description string `json:"description"`
-
-	// Manifest defines the extension's API specification, authentication, and configuration.
-	Manifest *Manifest `json:"manifest"`
-
-	// RuntimeConfig contains runtime-specific configuration for the extension.
-	RuntimeConfig *RuntimeConfig `json:"runtime_config,omitempty"`
-
-	// CreateTime is when the extension was created.
-	CreateTime time.Time `json:"create_time"`
-
-	// UpdateTime is when the extension was last updated.
-	UpdateTime time.Time `json:"update_time"`
-
-	// State indicates the current state of the extension.
+	// State indicates the current state of the extension (ADK-specific field).
 	State ExtensionState `json:"state"`
 
-	// Error contains error information if the extension is in an error state.
+	// Error contains error information if the extension is in an error state (ADK-specific field).
 	Error *ExtensionError `json:"error,omitempty"`
+}
+
+// GetID extracts the extension ID from the resource name.
+// Resource name format: projects/{project}/locations/{location}/extensions/{extension_id}
+func (e *Extension) GetID() string {
+	if e.Extension == nil || e.Extension.Name == "" {
+		return ""
+	}
+	parts := strings.Split(e.Extension.Name, "/")
+	if len(parts) >= 6 && parts[4] == "extensions" {
+		return parts[5]
+	}
+	return ""
+}
+
+// GetCreateTimeAsTime returns the create time as a time.Time.
+func (e *Extension) GetCreateTimeAsTime() time.Time {
+	if e.Extension == nil || e.Extension.CreateTime == nil {
+		return time.Time{}
+	}
+	return e.Extension.CreateTime.AsTime()
+}
+
+// GetUpdateTimeAsTime returns the update time as a time.Time.
+func (e *Extension) GetUpdateTimeAsTime() time.Time {
+	if e.Extension == nil || e.Extension.UpdateTime == nil {
+		return time.Time{}
+	}
+	return e.Extension.UpdateTime.AsTime()
 }
 
 // ExtensionState represents the current state of an extension.
@@ -78,239 +90,266 @@ type ExtensionError struct {
 	Details []any `json:"details,omitempty"`
 }
 
-// Manifest defines the structure and configuration of an extension.
-//
-// The manifest specifies how the extension integrates with external APIs,
-// including authentication methods, API specifications, and runtime behavior.
-type Manifest struct {
-	// Name is the name of the extension tool that will be used for function calling.
-	Name string `json:"name"`
+// Type aliases for protobuf types to provide a cleaner API
+type (
+	// ExtensionManifest represents the manifest spec of an extension.
+	ExtensionManifest = aiplatformpb.ExtensionManifest
 
-	// Description describes what the extension does.
-	Description string `json:"description"`
+	// AuthConfig specifies authentication configuration for extensions.
+	AuthConfig = aiplatformpb.AuthConfig
 
-	// APISpec defines the API specification for the extension.
-	APISpec *APISpec `json:"api_spec"`
+	// AuthType represents the authentication type for extensions.
+	AuthType = aiplatformpb.AuthType
 
-	// AuthConfig specifies the authentication configuration.
-	AuthConfig *AuthConfig `json:"auth_config"`
-}
-
-// APISpec defines the API specification for an extension.
-type APISpec struct {
-	// OpenAPIGCSURI is the Google Cloud Storage URI pointing to the OpenAPI specification.
-	// Format: gs://bucket-name/path/to/openapi.yaml
-	OpenAPIGCSURI string `json:"open_api_gcs_uri"`
-}
-
-// AuthConfig specifies authentication configuration for extensions.
-type AuthConfig struct {
-	// AuthType specifies the type of authentication to use.
-	AuthType AuthType `json:"auth_type"`
-
-	// GoogleServiceAccountConfig contains configuration for Google Service Account authentication.
-	GoogleServiceAccountConfig *GoogleServiceAccountConfig `json:"google_service_account_config,omitempty"`
-
-	// HTTPBasicAuthConfig contains configuration for HTTP Basic authentication.
-	HTTPBasicAuthConfig *HTTPBasicAuthConfig `json:"http_basic_auth_config,omitempty"`
-
-	// OAuth2Config contains configuration for OAuth2 authentication.
-	OAuth2Config *OAuth2Config `json:"oauth2_config,omitempty"`
-
-	// APIKeyConfig contains configuration for API key authentication.
-	APIKeyConfig *APIKeyConfig `json:"api_key_config,omitempty"`
-}
-
-// AuthType represents the authentication type for extensions.
-type AuthType string
-
-const (
-	// AuthTypeUnspecified indicates unspecified authentication.
-	AuthTypeUnspecified AuthType = "AUTH_TYPE_UNSPECIFIED"
-
-	// AuthTypeGoogleServiceAccount uses Google Service Account authentication.
-	AuthTypeGoogleServiceAccount AuthType = "GOOGLE_SERVICE_ACCOUNT_AUTH"
-
-	// AuthTypeHTTPBasic uses HTTP Basic authentication.
-	AuthTypeHTTPBasic AuthType = "HTTP_BASIC_AUTH"
-
-	// AuthTypeOAuth2 uses OAuth2 authentication.
-	AuthTypeOAuth2 AuthType = "OAUTH2_AUTH"
-
-	// AuthTypeAPIKey uses API key authentication.
-	AuthTypeAPIKey AuthType = "API_KEY_AUTH"
+	// RuntimeConfig contains runtime-specific configuration for extensions.
+	RuntimeConfig = aiplatformpb.RuntimeConfig
 )
 
-// GoogleServiceAccountConfig contains configuration for Google Service Account authentication.
-type GoogleServiceAccountConfig struct {
-	// ServiceAccount is the email address of the service account.
-	// If empty, the default Compute Engine service account will be used.
-	ServiceAccount string `json:"service_account,omitempty"`
+// Authentication type constants mapped from protobuf
+const (
+	// AuthTypeUnspecified indicates unspecified authentication.
+	AuthTypeUnspecified = aiplatformpb.AuthType_AUTH_TYPE_UNSPECIFIED
+
+	// AuthTypeNoAuth indicates no authentication.
+	AuthTypeNoAuth = aiplatformpb.AuthType_NO_AUTH
+
+	// AuthTypeAPIKey uses API key authentication.
+	AuthTypeAPIKey = aiplatformpb.AuthType_API_KEY_AUTH
+
+	// AuthTypeHTTPBasic uses HTTP Basic authentication.
+	AuthTypeHTTPBasic = aiplatformpb.AuthType_HTTP_BASIC_AUTH
+
+	// AuthTypeGoogleServiceAccount uses Google Service Account authentication.
+	AuthTypeGoogleServiceAccount = aiplatformpb.AuthType_GOOGLE_SERVICE_ACCOUNT_AUTH
+
+	// AuthTypeOAuth uses OAuth authentication.
+	AuthTypeOAuth = aiplatformpb.AuthType_OAUTH
+
+	// AuthTypeOIDC uses OpenID Connect authentication.
+	AuthTypeOIDC = aiplatformpb.AuthType_OIDC_AUTH
+)
+
+// Helper functions for creating auth configs
+
+// NewGoogleServiceAccountConfig creates a new Google Service Account auth config.
+func NewGoogleServiceAccountConfig(serviceAccount string) *AuthConfig {
+	return &AuthConfig{
+		AuthType: AuthTypeGoogleServiceAccount,
+		AuthConfig: &aiplatformpb.AuthConfig_GoogleServiceAccountConfig_{
+			GoogleServiceAccountConfig: &aiplatformpb.AuthConfig_GoogleServiceAccountConfig{
+				ServiceAccount: serviceAccount,
+			},
+		},
+	}
 }
 
-// HTTPBasicAuthConfig contains configuration for HTTP Basic authentication.
-type HTTPBasicAuthConfig struct {
-	// Username is the username for HTTP Basic authentication.
-	Username string `json:"username"`
-
-	// PasswordSecretName is the name of the secret containing the password.
-	PasswordSecretName string `json:"password_secret_name"`
+// NewAPIKeyConfig creates a new API key auth config.
+func NewAPIKeyConfig(secretName, header string) *AuthConfig {
+	return &AuthConfig{
+		AuthType: AuthTypeAPIKey,
+		AuthConfig: &aiplatformpb.AuthConfig_ApiKeyConfig_{
+			ApiKeyConfig: &aiplatformpb.AuthConfig_ApiKeyConfig{
+				ApiKeySecret: secretName,
+				Name:         header,
+			},
+		},
+	}
 }
 
-// OAuth2Config contains configuration for OAuth2 authentication.
-type OAuth2Config struct {
-	// ClientID is the OAuth2 client ID.
-	ClientID string `json:"client_id"`
-
-	// ClientSecretName is the name of the secret containing the client secret.
-	ClientSecretName string `json:"client_secret_name"`
-
-	// TokenURI is the URI for token requests.
-	TokenURI string `json:"token_uri"`
-
-	// Scopes are the OAuth2 scopes to request.
-	Scopes []string `json:"scopes,omitempty"`
+// NewHTTPBasicAuthConfig creates a new HTTP Basic auth config.
+func NewHTTPBasicAuthConfig(credentialSecret string) *AuthConfig {
+	return &AuthConfig{
+		AuthType: AuthTypeHTTPBasic,
+		AuthConfig: &aiplatformpb.AuthConfig_HttpBasicAuthConfig_{
+			HttpBasicAuthConfig: &aiplatformpb.AuthConfig_HttpBasicAuthConfig{
+				CredentialSecret: credentialSecret,
+			},
+		},
+	}
 }
 
-// APIKeyConfig contains configuration for API key authentication.
-type APIKeyConfig struct {
-	// APIKeySecretName is the name of the secret containing the API key.
-	APIKeySecretName string `json:"api_key_secret_name"`
-
-	// APIKeyHeader is the header name for the API key.
-	// Default is "X-API-Key" if not specified.
-	APIKeyHeader string `json:"api_key_header,omitempty"`
+// NewOAuthConfigWithAccessToken creates a new OAuth auth config with access token.
+func NewOAuthConfigWithAccessToken(accessToken string) *AuthConfig {
+	return &AuthConfig{
+		AuthType: AuthTypeOAuth,
+		AuthConfig: &aiplatformpb.AuthConfig_OauthConfig_{
+			OauthConfig: &aiplatformpb.AuthConfig_OauthConfig{
+				OauthConfig: &aiplatformpb.AuthConfig_OauthConfig_AccessToken{
+					AccessToken: accessToken,
+				},
+			},
+		},
+	}
 }
 
-// RuntimeConfig contains runtime-specific configuration for extensions.
-type RuntimeConfig struct {
-	// VertexAISearchRuntimeConfig contains configuration for Vertex AI Search extensions.
-	VertexAISearchRuntimeConfig *VertexAISearchRuntimeConfig `json:"vertex_ai_search_runtime_config,omitempty"`
-
-	// CodeInterpreterRuntimeConfig contains configuration for code interpreter extensions.
-	CodeInterpreterRuntimeConfig *CodeInterpreterRuntimeConfig `json:"code_interpreter_runtime_config,omitempty"`
-
-	// CustomRuntimeConfig contains custom runtime configuration.
-	CustomRuntimeConfig map[string]any `json:"custom_runtime_config,omitempty"`
+// NewOAuthConfigWithServiceAccount creates a new OAuth auth config with service account.
+func NewOAuthConfigWithServiceAccount(serviceAccount string) *AuthConfig {
+	return &AuthConfig{
+		AuthType: AuthTypeOAuth,
+		AuthConfig: &aiplatformpb.AuthConfig_OauthConfig_{
+			OauthConfig: &aiplatformpb.AuthConfig_OauthConfig{
+				OauthConfig: &aiplatformpb.AuthConfig_OauthConfig_ServiceAccount{
+					ServiceAccount: serviceAccount,
+				},
+			},
+		},
+	}
 }
 
-// VertexAISearchRuntimeConfig contains runtime configuration for Vertex AI Search extensions.
-type VertexAISearchRuntimeConfig struct {
-	// ServingConfigName is the name of the serving configuration.
-	// Format: projects/{project}/locations/{location}/collections/{collection}/engines/{engine}/servingConfigs/{serving_config}
-	ServingConfigName string `json:"serving_config_name"`
+// Helper functions for creating runtime configs
 
-	// MaxResults is the maximum number of search results to return.
-	MaxResults int32 `json:"max_results,omitempty"`
+// NewCodeInterpreterRuntimeConfig creates a new code interpreter runtime config.
+func NewCodeInterpreterRuntimeConfig(inputBucket, outputBucket string) *RuntimeConfig {
+	return &RuntimeConfig{
+		GoogleFirstPartyExtensionConfig: &aiplatformpb.RuntimeConfig_CodeInterpreterRuntimeConfig_{
+			CodeInterpreterRuntimeConfig: &aiplatformpb.RuntimeConfig_CodeInterpreterRuntimeConfig{
+				FileInputGcsBucket:  inputBucket,
+				FileOutputGcsBucket: outputBucket,
+			},
+		},
+	}
 }
 
-// CodeInterpreterRuntimeConfig contains runtime configuration for code interpreter extensions.
-type CodeInterpreterRuntimeConfig struct {
-	// TimeoutSeconds is the maximum execution time in seconds.
-	TimeoutSeconds int32 `json:"timeout_seconds,omitempty"`
-
-	// FileInputGCSBucket is the GCS bucket for input files.
-	FileInputGCSBucket string `json:"file_input_gcs_bucket,omitempty"`
-
-	// FileOutputGCSBucket is the GCS bucket for output files.
-	FileOutputGCSBucket string `json:"file_output_gcs_bucket,omitempty"`
+// NewVertexAISearchRuntimeConfig creates a new Vertex AI Search runtime config.
+func NewVertexAISearchRuntimeConfig(servingConfigName, engineID string) *RuntimeConfig {
+	return &RuntimeConfig{
+		GoogleFirstPartyExtensionConfig: &aiplatformpb.RuntimeConfig_VertexAiSearchRuntimeConfig{
+			VertexAiSearchRuntimeConfig: &aiplatformpb.RuntimeConfig_VertexAISearchRuntimeConfig{
+				ServingConfigName: servingConfigName,
+				EngineId:          engineID,
+			},
+		},
+	}
 }
 
-// Request and Response Types
+// Helper functions for creating extension manifests
 
-// CreateExtensionRequest contains parameters for creating a new extension.
-type CreateExtensionRequest struct {
-	// DisplayName is the human-readable name for the extension.
-	DisplayName string `json:"display_name"`
-
-	// Description provides details about the extension's purpose.
-	Description string `json:"description"`
-
-	// Manifest defines the extension's configuration.
-	Manifest *Manifest `json:"manifest"`
-
-	// RuntimeConfig contains runtime-specific configuration.
-	RuntimeConfig *RuntimeConfig `json:"runtime_config,omitempty"`
+// NewExtensionManifest creates a new extension manifest.
+func NewExtensionManifest(name, description, openAPIGCSURI string, authConfig *AuthConfig) *ExtensionManifest {
+	return &ExtensionManifest{
+		Name:        name,
+		Description: description,
+		ApiSpec: &aiplatformpb.ExtensionManifest_ApiSpec{
+			ApiSpec: &aiplatformpb.ExtensionManifest_ApiSpec_OpenApiGcsUri{
+				OpenApiGcsUri: openAPIGCSURI,
+			},
+		},
+		AuthConfig: authConfig,
+	}
 }
 
-// ListExtensionsRequest contains parameters for listing extensions.
-type ListExtensionsRequest struct {
-	// PageSize is the maximum number of extensions to return in a single page.
-	// If not specified or zero, the server will determine the page size.
-	PageSize int32 `json:"page_size,omitempty"`
-
-	// PageToken is the page token for pagination.
-	PageToken string `json:"page_token,omitempty"`
-
-	// Filter is an optional filter expression.
-	Filter string `json:"filter,omitempty"`
-
-	// OrderBy is an optional order by expression.
-	OrderBy string `json:"order_by,omitempty"`
+// NewExtensionManifestWithYAML creates a new extension manifest with inline YAML.
+func NewExtensionManifestWithYAML(name, description, openAPIYAML string, authConfig *AuthConfig) *ExtensionManifest {
+	return &ExtensionManifest{
+		Name:        name,
+		Description: description,
+		ApiSpec: &aiplatformpb.ExtensionManifest_ApiSpec{
+			ApiSpec: &aiplatformpb.ExtensionManifest_ApiSpec_OpenApiYaml{
+				OpenApiYaml: openAPIYAML,
+			},
+		},
+		AuthConfig: authConfig,
+	}
 }
 
-// ListExtensionsResponse contains the response from listing extensions.
-type ListExtensionsResponse struct {
-	// Extensions is the list of extensions.
-	Extensions []*Extension `json:"extensions"`
+// Request and Response Types - using protobuf types
+type (
+	// ImportExtensionRequest contains parameters for importing/creating a new extension.
+	// This replaces the custom CreateExtensionRequest to align with the protobuf API.
+	ImportExtensionRequest = aiplatformpb.ImportExtensionRequest
 
-	// NextPageToken is the token for the next page of results.
-	NextPageToken string `json:"next_page_token"`
+	// ListExtensionsRequest contains parameters for listing extensions.
+	ListExtensionsRequest = aiplatformpb.ListExtensionsRequest
+
+	// ListExtensionsResponse contains the response from listing extensions.
+	ListExtensionsResponse = aiplatformpb.ListExtensionsResponse
+
+	// GetExtensionRequest contains parameters for getting a specific extension.
+	GetExtensionRequest = aiplatformpb.GetExtensionRequest
+
+	// DeleteExtensionRequest contains parameters for deleting an extension.
+	DeleteExtensionRequest = aiplatformpb.DeleteExtensionRequest
+
+	// UpdateExtensionRequest contains parameters for updating an extension.
+	UpdateExtensionRequest = aiplatformpb.UpdateExtensionRequest
+
+	// ExecuteExtensionRequest contains parameters for executing an extension operation.
+	ExecuteExtensionRequest = aiplatformpb.ExecuteExtensionRequest
+
+	// ExecuteExtensionResponse contains the result of executing an extension operation.
+	ExecuteExtensionResponse = aiplatformpb.ExecuteExtensionResponse
+
+	// QueryExtensionRequest contains parameters for querying extension capabilities.
+	QueryExtensionRequest = aiplatformpb.QueryExtensionRequest
+
+	// QueryExtensionResponse contains the response from querying extension capabilities.
+	QueryExtensionResponse = aiplatformpb.QueryExtensionResponse
+)
+
+// Helper functions for creating requests
+
+// NewImportExtensionRequest creates a new import extension request.
+func NewImportExtensionRequest(parent, displayName, description string, manifest *ExtensionManifest, runtimeConfig *RuntimeConfig) *ImportExtensionRequest {
+	ext := &aiplatformpb.Extension{
+		DisplayName:   displayName,
+		Description:   description,
+		Manifest:      manifest,
+		RuntimeConfig: runtimeConfig,
+	}
+
+	return &ImportExtensionRequest{
+		Parent:    parent,
+		Extension: ext,
+	}
 }
 
-// GetExtensionRequest contains parameters for getting a specific extension.
-type GetExtensionRequest struct {
-	// Name is the resource name of the extension.
-	// Format: projects/{project}/locations/{location}/extensions/{extension_id}
-	Name string `json:"name"`
+// NewListExtensionsRequest creates a new list extensions request.
+func NewListExtensionsRequest(parent string, pageSize int32, pageToken, filter, orderBy string) *ListExtensionsRequest {
+	return &ListExtensionsRequest{
+		Parent:    parent,
+		PageSize:  pageSize,
+		PageToken: pageToken,
+		Filter:    filter,
+		OrderBy:   orderBy,
+	}
 }
 
-// DeleteExtensionRequest contains parameters for deleting an extension.
-type DeleteExtensionRequest struct {
-	// Name is the resource name of the extension to delete.
-	// Format: projects/{project}/locations/{location}/extensions/{extension_id}
-	Name string `json:"name"`
+// NewGetExtensionRequest creates a new get extension request.
+func NewGetExtensionRequest(name string) *GetExtensionRequest {
+	return &GetExtensionRequest{
+		Name: name,
+	}
 }
 
-// ExecuteExtensionRequest contains parameters for executing an extension operation.
-type ExecuteExtensionRequest struct {
-	// Name is the resource name of the extension.
-	// Format: projects/{project}/locations/{location}/extensions/{extension_id}
-	Name string `json:"name"`
-
-	// OperationID is the ID of the operation to execute.
-	OperationID string `json:"operation_id"`
-
-	// OperationParams are the parameters for the operation.
-	OperationParams map[string]any `json:"operation_params"`
-
-	// RequestID is an optional request ID for idempotency.
-	RequestID string `json:"request_id,omitempty"`
+// NewDeleteExtensionRequest creates a new delete extension request.
+func NewDeleteExtensionRequest(name string) *DeleteExtensionRequest {
+	return &DeleteExtensionRequest{
+		Name: name,
+	}
 }
 
-// ExecuteExtensionResponse contains the result of executing an extension operation.
-type ExecuteExtensionResponse struct {
-	// Content is the response content from the extension.
-	Content json.RawMessage `json:"content"`
-
-	// Error contains error information if the execution failed.
-	Error *ExecutionErrorResponse `json:"error,omitempty"`
-
-	// Metadata contains additional metadata about the execution.
-	Metadata map[string]any `json:"metadata,omitempty"`
-}
-
-// ExecutionErrorResponse represents an error response from extension execution.
-type ExecutionErrorResponse struct {
-	// Code is the error code.
-	Code string `json:"code"`
-
-	// Message is the error message.
-	Message string `json:"message"`
-
-	// Details contains additional error details.
-	Details map[string]any `json:"details,omitempty"`
-}
+// // Backward compatibility types
+//
+// // CreateExtensionRequest provides backward compatibility with the old API.
+// // Deprecated: Use ImportExtensionRequest instead.
+// type CreateExtensionRequest struct {
+// 	// DisplayName is the human-readable name for the extension.
+// 	DisplayName string `json:"display_name"`
+//
+// 	// Description provides details about the extension's purpose.
+// 	Description string `json:"description"`
+//
+// 	// Manifest defines the extension's configuration.
+// 	Manifest *ExtensionManifest `json:"manifest"`
+//
+// 	// RuntimeConfig contains runtime-specific configuration.
+// 	RuntimeConfig *RuntimeConfig `json:"runtime_config,omitempty"`
+// }
+//
+// // ToImportRequest converts a CreateExtensionRequest to an ImportExtensionRequest.
+// func (r *CreateExtensionRequest) ToImportRequest(parent string) *ImportExtensionRequest {
+// 	return NewImportExtensionRequest(parent, r.DisplayName, r.Description, r.Manifest, r.RuntimeConfig)
+// }
 
 // Prebuilt Extension Types
 
@@ -368,6 +407,8 @@ type VertexAISearchExecutionResponse struct {
 }
 
 // SearchResult represents a single search result.
+// This remains as a custom type since it's used for convenience functions
+// and doesn't have a direct protobuf equivalent in the extension context.
 type SearchResult struct {
 	// ID is the unique identifier for the result.
 	ID string `json:"id"`

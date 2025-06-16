@@ -10,7 +10,7 @@ import (
 
 // getPrebuiltExtensionConfig returns the manifest and runtime configuration
 // for a prebuilt extension type.
-func (s *Service) getPrebuiltExtensionConfig(extensionType PrebuiltExtensionType) (*Manifest, *RuntimeConfig, error) {
+func (s *Service) getPrebuiltExtensionConfig(extensionType PrebuiltExtensionType) (*ExtensionManifest, *RuntimeConfig, error) {
 	switch extensionType {
 	case PrebuiltExtensionCodeInterpreter:
 		return s.getCodeInterpreterConfig()
@@ -25,49 +25,37 @@ func (s *Service) getPrebuiltExtensionConfig(extensionType PrebuiltExtensionType
 }
 
 // getCodeInterpreterConfig returns the configuration for the code interpreter extension.
-func (s *Service) getCodeInterpreterConfig() (*Manifest, *RuntimeConfig, error) {
-	manifest := &Manifest{
-		Name:        "code_interpreter_tool",
-		Description: "Google Code Interpreter Extension",
-		APISpec: &APISpec{
-			OpenAPIGCSURI: "gs://vertex-extension-public/code_interpreter.yaml",
-		},
-		AuthConfig: &AuthConfig{
-			AuthType:                   AuthTypeGoogleServiceAccount,
-			GoogleServiceAccountConfig: &GoogleServiceAccountConfig{},
-		},
-	}
+func (s *Service) getCodeInterpreterConfig() (*ExtensionManifest, *RuntimeConfig, error) {
+	manifest := NewExtensionManifest(
+		"code_interpreter_tool",
+		"Google Code Interpreter Extension",
+		"gs://vertex-extension-public/code_interpreter.yaml",
+		NewGoogleServiceAccountConfig(""), // Empty string uses default service account
+	)
 
-	runtimeConfig := &RuntimeConfig{
-		CodeInterpreterRuntimeConfig: &CodeInterpreterRuntimeConfig{
-			TimeoutSeconds: 300, // 5 minutes default timeout
-		},
-	}
+	runtimeConfig := NewCodeInterpreterRuntimeConfig(
+		"", // No specific input bucket
+		"", // No specific output bucket
+	)
 
 	return manifest, runtimeConfig, nil
 }
 
 // getVertexAISearchConfig returns the configuration for the Vertex AI Search extension.
-func (s *Service) getVertexAISearchConfig() (*Manifest, *RuntimeConfig, error) {
-	manifest := &Manifest{
-		Name:        "vertex_ai_search",
-		Description: "Google Vertex AI Search Extension",
-		APISpec: &APISpec{
-			OpenAPIGCSURI: "gs://vertex-extension-public/vertex_ai_search.yaml",
-		},
-		AuthConfig: &AuthConfig{
-			AuthType:                   AuthTypeGoogleServiceAccount,
-			GoogleServiceAccountConfig: &GoogleServiceAccountConfig{},
-		},
-	}
+func (s *Service) getVertexAISearchConfig() (*ExtensionManifest, *RuntimeConfig, error) {
+	manifest := NewExtensionManifest(
+		"vertex_ai_search",
+		"Google Vertex AI Search Extension",
+		"gs://vertex-extension-public/vertex_ai_search.yaml",
+		NewGoogleServiceAccountConfig(""), // Empty string uses default service account
+	)
 
 	// Note: RuntimeConfig for Vertex AI Search requires serving_config_name
 	// which must be provided when creating the extension
-	runtimeConfig := &RuntimeConfig{
-		VertexAISearchRuntimeConfig: &VertexAISearchRuntimeConfig{
-			MaxResults: 10, // Default max results
-		},
-	}
+	runtimeConfig := NewVertexAISearchRuntimeConfig(
+		"", // Serving config name must be set later
+		"", // Engine ID not specified
+	)
 
 	return manifest, runtimeConfig, nil
 }
@@ -116,7 +104,9 @@ func (s *Service) CreateVertexAISearchExtension(ctx context.Context, servingConf
 	}
 
 	// Set the serving config name
-	runtimeConfig.VertexAISearchRuntimeConfig.ServingConfigName = servingConfigName
+	if vertexSearchConfig := runtimeConfig.GetVertexAiSearchRuntimeConfig(); vertexSearchConfig != nil {
+		vertexSearchConfig.ServingConfigName = servingConfigName
+	}
 
 	req := &CreateExtensionRequest{
 		DisplayName:   s.getPrebuiltDisplayName(PrebuiltExtensionVertexAISearch),
