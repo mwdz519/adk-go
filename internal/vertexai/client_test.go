@@ -78,11 +78,11 @@ func TestNewClient(t *testing.T) {
 					t.Error("RAG service not initialized")
 				}
 
-				if client.ContentCaching() == nil {
+				if client.Caching() == nil {
 					t.Error("ContentCaching service not initialized")
 				}
 
-				if client.GenerativeModels() == nil {
+				if client.GenerativeModel() == nil {
 					t.Error("GenerativeModels service not initialized")
 				}
 
@@ -178,7 +178,7 @@ func TestClient_ServiceAccess(t *testing.T) {
 	})
 
 	t.Run("ContentCaching service", func(t *testing.T) {
-		service := client.ContentCaching()
+		service := client.Caching()
 		if service == nil {
 			t.Error("ContentCaching() returned nil")
 		}
@@ -194,7 +194,7 @@ func TestClient_ServiceAccess(t *testing.T) {
 	})
 
 	t.Run("GenerativeModels service", func(t *testing.T) {
-		service := client.GenerativeModels()
+		service := client.GenerativeModel()
 		if service == nil {
 			t.Error("GenerativeModels() returned nil")
 		}
@@ -290,8 +290,8 @@ func ExampleNewClient() {
 
 	// Access individual services
 	ragService := client.RAG()
-	contentCacheService := client.ContentCaching()
-	generativeService := client.GenerativeModels()
+	contentCacheService := client.Caching()
+	generativeService := client.GenerativeModel()
 	modelGardenService := client.ModelGarden()
 
 	// Use the services for various operations

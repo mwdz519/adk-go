@@ -20,10 +20,10 @@ import (
 	"github.com/go-a2a/adk-go/internal/vertexai/prompt"
 )
 
-// Client provides unified access to all Vertex AI preview functionality.
+// Client provides unified access to all Vertex AI GA and preview functionality.
 //
-// The preview client orchestrates multiple specialized services to provide
-// comprehensive access to experimental and preview features of Vertex AI.
+// The client orchestrates multiple specialized services to provide
+// comprehensive access to GA and and preview features of Vertex AI.
 // It maintains a single authentication context and configuration across
 // all preview services.
 type Client struct {
@@ -33,7 +33,7 @@ type Client struct {
 	logger    *slog.Logger
 
 	// Core services
-	contentCacheService *caching.Service
+	cachingService      *caching.Service
 	exampleStoreService *examplestore.Service
 	generativeService   *generativemodel.Service
 	modelGardenService  *modelgarden.Service
@@ -93,7 +93,7 @@ func NewClient(ctx context.Context, projectID, location string, opts ...ClientOp
 	if err != nil {
 		return nil, fmt.Errorf("failed to initialize content caching service: %w", err)
 	}
-	client.contentCacheService = contentCacheService
+	client.cachingService = contentCacheService
 
 	// Initialize example store service
 	exampleStoreService, err := examplestore.NewService(ctx, projectID, location, examplestore.WithLogger(client.logger))
@@ -173,7 +173,7 @@ func NewClient(ctx context.Context, projectID, location string, opts ...ClientOp
 func (c *Client) Close() error {
 	c.logger.Info("Closing Vertex AI preview client")
 
-	if err := c.contentCacheService.Close(); err != nil {
+	if err := c.cachingService.Close(); err != nil {
 		c.logger.Error("Failed to close content caching service", slog.String("error", err.Error()))
 		return fmt.Errorf("failed to close content caching service: %w", err)
 	}
@@ -233,20 +233,12 @@ func (c *Client) Close() error {
 // These methods provide access to individual preview services while maintaining
 // the unified client context and configuration.
 
-// RAG returns the RAG (Retrieval-Augmented Generation) client.
-//
-// The RAG client provides comprehensive functionality for managing corpora,
-// importing documents, and performing retrieval-augmented generation.
-func (c *Client) RAG() *rag.Service {
-	return c.ragClient
-}
-
-// ContentCaching returns the content caching service.
+// Caching returns the content caching service.
 //
 // The content caching service provides optimized caching for large content
 // contexts, reducing token usage and improving performance for repeated queries.
-func (c *Client) ContentCaching() *caching.Service {
-	return c.contentCacheService
+func (c *Client) Caching() *caching.Service {
+	return c.cachingService
 }
 
 // ExampleStore returns the example store service.
@@ -257,11 +249,11 @@ func (c *Client) ExampleStore() *examplestore.Service {
 	return c.exampleStoreService
 }
 
-// GenerativeModels returns the enhanced generative models service.
+// GenerativeModel returns the enhanced generative models service.
 //
 // This service provides access to preview features for generative AI models,
 // including advanced configuration options and experimental capabilities.
-func (c *Client) GenerativeModels() *generativemodel.Service {
+func (c *Client) GenerativeModel() *generativemodel.Service {
 	return c.generativeService
 }
 
@@ -273,20 +265,43 @@ func (c *Client) ModelGarden() *modelgarden.Service {
 	return c.modelGardenService
 }
 
-// Extensions returns the Extension service.
+// Extension returns the Extension service.
 //
-// The Extension service provides access to Vertex AI Extensions functionality,
+// The Extension service provides access to Vertex AI Extension functionality,
 // including creating, managing, and executing both custom and prebuilt extensions.
-func (c *Client) Extensions() *extension.Service {
+func (c *Client) Extension() *extension.Service {
 	return c.extensionService
 }
 
-// Prompts returns the Prompts service.
+// Prompt returns the Prompt service.
 //
-// The Prompts service provides comprehensive prompt management functionality,
+// The Prompt service provides comprehensive prompt management functionality,
 // including creation, versioning, template processing, and cloud storage integration.
-func (c *Client) Prompts() *prompt.Service {
+func (c *Client) Prompt() *prompt.Service {
 	return c.promptsService
+}
+
+// RAG returns the RAG (Retrieval-Augmented Generation) client.
+//
+// The RAG client provides comprehensive functionality for managing corpora,
+// importing documents, and performing retrieval-augmented generation.
+func (c *Client) RAG() *rag.Service {
+	return c.ragClient
+}
+
+// Evaluation returns the Evaluation client
+func (c *Client) Evaluation() *evaluation.Service {
+	return c.evaluationService
+}
+
+// ReasoningEngine returns the Reasoning Engine client.
+func (c *Client) ReasoningEngine() *reasoningengine.Service {
+	return c.reasoningengineService
+}
+
+// Tuning returns the Tuning client.
+func (c *Client) Tuning() *tuning.Service {
+	return c.tuningService
 }
 
 // Configuration Access Methods
@@ -318,11 +333,7 @@ func (c *Client) HealthCheck(ctx context.Context) error {
 	// Note: In a full implementation, you would perform actual health checks
 	// against each service. For now, we just verify the services are initialized.
 
-	if c.ragClient == nil {
-		return fmt.Errorf("RAG client not initialized")
-	}
-
-	if c.contentCacheService == nil {
+	if c.cachingService == nil {
 		return fmt.Errorf("content caching service not initialized")
 	}
 
@@ -346,6 +357,22 @@ func (c *Client) HealthCheck(ctx context.Context) error {
 		return fmt.Errorf("Prompts service not initialized")
 	}
 
+	if c.ragClient == nil {
+		return fmt.Errorf("RAG client not initialized")
+	}
+
+	if c.evaluationService == nil {
+		return fmt.Errorf("Evaluation service not initialized")
+	}
+
+	if c.reasoningengineService == nil {
+		return fmt.Errorf("Reasoning Engine service not initialized")
+	}
+
+	if c.tuningService == nil {
+		return fmt.Errorf("Tuning service not initialized")
+	}
+
 	c.logger.InfoContext(ctx, "Preview client health check passed")
 	return nil
 }
@@ -360,7 +387,7 @@ func (c *Client) GetServiceStatus() map[string]string {
 		status["rag"] = "not_initialized"
 	}
 
-	if c.contentCacheService != nil {
+	if c.cachingService != nil {
 		status["content_caching"] = "initialized"
 	} else {
 		status["content_caching"] = "not_initialized"
