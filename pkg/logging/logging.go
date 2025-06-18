@@ -25,7 +25,6 @@ func FromContext(ctx context.Context) *slog.Logger {
 		return v.(*slog.Logger)
 	}
 	return slog.New(slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{
-		AddSource: true,
-		Level:     slog.LevelDebug,
+		Level: slog.LevelInfo,
 	}))
 }
