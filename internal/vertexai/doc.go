@@ -1,7 +1,7 @@
 // Copyright 2025 The Go A2A Authors
 // SPDX-License-Identifier: Apache-2.0
 
-// Package vertex provides a Go implementation of Google Cloud Vertex AI preview functionality.
+// Package vertexai provides a Go implementation of Google Cloud Vertex AI preview functionality.
 //
 // This package is a port of the Python vertexai.preview module, providing access to experimental and
 // preview features of Vertex AI services. It includes support for:
@@ -82,4 +82,4 @@
 //
 // The package uses Google Cloud authentication via Application Default Credentials (ADC).
 // Ensure proper credentials are configured before using preview services.
-package vertex
+package vertexai

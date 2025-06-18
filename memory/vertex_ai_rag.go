@@ -14,13 +14,14 @@ import (
 	"github.com/go-json-experiment/json"
 	"google.golang.org/genai"
 
-	ragclient "github.com/go-a2a/adk-go/internal/vertexai/preview/rag"
+	"github.com/go-a2a/adk-go/internal/vertexai"
+	"github.com/go-a2a/adk-go/internal/vertexai/preview/rag"
 	"github.com/go-a2a/adk-go/types"
 )
 
 // VertexAIRagService implements Service with Google Cloud Vertex AI RAG.
 type VertexAIRagService struct {
-	ragClient               *ragclient.Service
+	client                  *vertexai.Client
 	ragCorpus               string
 	similarityTopK          int
 	vectorDistanceThreshold float64
@@ -55,21 +56,21 @@ func WithVectorDistanceThreshold(threshold float64) VertexAIRagOption {
 }
 
 // NewVertexAIRagService creates a new VertexAIRagService.
-func NewVertexAIRagService(ctx context.Context, projectID, location, ragCorpus string, opts ...VertexAIRagOption) (*VertexAIRagService, error) {
-	ragClient, err := ragclient.NewService(ctx, projectID, location)
+func NewVertexAIRagService(ctx context.Context, projectID, location, ragCorpus string, opts ...vertexai.ClientOption) (*VertexAIRagService, error) {
+	client, err := vertexai.NewClient(ctx, projectID, location, opts...)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create RAG client: %w", err)
 	}
 
 	s := &VertexAIRagService{
-		ragClient:               ragClient,
+		client:                  client,
 		ragCorpus:               ragCorpus,
 		similarityTopK:          5,   // Default value
 		vectorDistanceThreshold: 0.7, // Default value
 		logger:                  slog.Default(),
 	}
 	for _, opt := range opts {
-		opt(s)
+		opt(s.client)
 	}
 
 	vertexGagStore := &genai.VertexRAGStore{
@@ -155,20 +156,20 @@ func (s *VertexAIRagService) AddSessionToMemory(ctx context.Context, session typ
 	}
 
 	// Upload file to RAG corpus using new internal client
-	ragFile := &ragclient.RagFile{
+	ragFile := &rag.RagFile{
 		DisplayName: fmt.Sprintf("session-%s-%s-%s", session.AppName(), session.UserID(), session.ID()),
 		Description: fmt.Sprintf("Session data for app %s, user %s, session %s", session.AppName(), session.UserID(), session.ID()),
-		RagFileSource: &ragclient.RagFileSource{
-			DirectUploadSource: &ragclient.DirectUploadSource{},
+		RagFileSource: &rag.RagFileSource{
+			DirectUploadSource: &rag.DirectUploadSource{},
 		},
 	}
 
-	uploadConfig := &ragclient.UploadRagFileConfig{
+	uploadConfig := &rag.UploadRagFileConfig{
 		ChunkSize:    1000, // Default chunk size
 		ChunkOverlap: 100,  // Default overlap
 	}
 
-	uploadedFile, err := s.ragClient.UploadFile(ctx, s.ragCorpus, ragFile, uploadConfig)
+	uploadedFile, err := s.client.RAG().UploadFile(ctx, s.ragCorpus, ragFile, uploadConfig)
 	if err != nil {
 		return fmt.Errorf("failed to upload session file to RAG corpus: %w", err)
 	}
@@ -192,7 +193,7 @@ func (s *VertexAIRagService) SearchMemory(ctx context.Context, appName, userID, 
 	)
 
 	// Perform semantic search using the new RAG client
-	searchReq := &ragclient.SearchRequest{
+	searchReq := &rag.SearchRequest{
 		Query:                   query,
 		CorporaNames:            []string{s.ragCorpus},
 		TopK:                    int32(s.similarityTopK),
@@ -203,7 +204,7 @@ func (s *VertexAIRagService) SearchMemory(ctx context.Context, appName, userID, 
 		},
 	}
 
-	searchResp, err := s.ragClient.Search(ctx, searchReq)
+	searchResp, err := s.client.RAG().Search(ctx, searchReq)
 	if err != nil {
 		return nil, fmt.Errorf("failed to search RAG corpus: %w", err)
 	}
@@ -266,8 +267,8 @@ func (s *VertexAIRagService) SearchMemory(ctx context.Context, appName, userID, 
 
 // Close closes the underlying RAG client and releases resources.
 func (s *VertexAIRagService) Close() error {
-	if s.ragClient != nil {
-		return s.ragClient.Close()
+	if s.client != nil {
+		return s.client.Close()
 	}
 	return nil
 }
