@@ -4,10 +4,11 @@
 package types
 
 import (
+	"bytes"
 	"encoding/base64"
+	json "encoding/json/v2"
 	"time"
 
-	"github.com/bytedance/sonic"
 	"google.golang.org/genai"
 )
 
@@ -45,14 +46,14 @@ func EncodeContent(content *genai.Content) (map[string]any, error) {
 	}
 
 	// First, convert to JSON
-	bytes, err := sonic.ConfigFastest.Marshal(content)
-	if err != nil {
+	var buf bytes.Buffer
+	if err := json.MarshalWrite(&buf, content); err != nil {
 		return nil, err
 	}
 
 	// Then unmarshal into a map
 	var result map[string]any
-	if err := sonic.ConfigFastest.Unmarshal(bytes, &result); err != nil {
+	if err := json.UnmarshalRead(&buf, &result); err != nil {
 		return nil, err
 	}
 
@@ -96,14 +97,14 @@ func DecodeContent(content map[string]any) (*genai.Content, error) {
 	}
 
 	// Convert map back to JSON
-	bytes, err := sonic.ConfigFastest.Marshal(content)
-	if err != nil {
+	var buf bytes.Buffer
+	if err := json.MarshalWrite(&buf, content); err != nil {
 		return nil, err
 	}
 
 	// Then unmarshal into a Content object
 	var result genai.Content
-	if err := sonic.ConfigFastest.Unmarshal(bytes, &result); err != nil {
+	if err := json.UnmarshalRead(&buf, &result); err != nil {
 		return nil, err
 	}
 

@@ -1,6 +1,6 @@
 module github.com/go-a2a/adk-go
 
-go 1.24
+go 1.25
 
 require (
 	cloud.google.com/go/aiplatform v1.91.0
@@ -9,7 +9,6 @@ require (
 	cloud.google.com/go/storage v1.55.0
 	github.com/MakeNowJust/heredoc/v2 v2.0.1
 	github.com/anthropics/anthropic-sdk-go v1.4.0
-	github.com/bytedance/sonic v1.13.3
 	github.com/docker/docker v28.2.2+incompatible
 	github.com/go-json-experiment/json v0.0.0-20250517221953-25912455fbc8
 	github.com/google/dotprompt/go v0.0.0-20250614133328-417a534d0fc6
@@ -51,9 +50,7 @@ require (
 	github.com/aws/smithy-go v1.20.3 // indirect
 	github.com/bahlo/generic-list-go v0.2.0 // indirect
 	github.com/buger/jsonparser v1.1.1 // indirect
-	github.com/bytedance/sonic/loader v0.2.4 // indirect
 	github.com/cespare/xxhash/v2 v2.3.0 // indirect
-	github.com/cloudwego/base64x v0.1.5 // indirect
 	github.com/cncf/xds/go v0.0.0-20250326154945-ae57f3c0d45f // indirect
 	github.com/containerd/errdefs v1.0.0 // indirect
 	github.com/containerd/errdefs/pkg v0.3.0 // indirect
@@ -74,7 +71,6 @@ require (
 	github.com/googleapis/gax-go/v2 v2.14.2 // indirect
 	github.com/gorilla/websocket v1.5.3 // indirect
 	github.com/invopop/jsonschema v0.13.0 // indirect
-	github.com/klauspost/cpuid/v2 v2.0.9 // indirect
 	github.com/mailru/easyjson v0.9.0 // indirect
 	github.com/mbleigh/raymond v0.0.0-20250414171441-6b3a58ab9e0a // indirect
 	github.com/moby/docker-image-spec v1.3.1 // indirect
@@ -90,7 +86,6 @@ require (
 	github.com/tidwall/match v1.1.1 // indirect
 	github.com/tidwall/pretty v1.2.1 // indirect
 	github.com/tidwall/sjson v1.2.5 // indirect
-	github.com/twitchyliquid64/golang-asm v0.15.1 // indirect
 	github.com/wk8/go-ordered-map/v2 v2.1.8 // indirect
 	github.com/zeebo/errs v1.4.0 // indirect
 	go.opentelemetry.io/auto/sdk v1.1.0 // indirect
@@ -103,7 +98,6 @@ require (
 	go.opentelemetry.io/otel/sdk v1.36.0 // indirect
 	go.opentelemetry.io/otel/sdk/metric v1.36.0 // indirect
 	go.opentelemetry.io/otel/trace v1.36.0 // indirect
-	golang.org/x/arch v0.18.0 // indirect
 	golang.org/x/crypto v0.39.0 // indirect
 	golang.org/x/net v0.41.0 // indirect
 	golang.org/x/sys v0.33.0 // indirect

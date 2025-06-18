@@ -4,10 +4,10 @@
 package types
 
 import (
+	json "encoding/json/v2"
 	"fmt"
 	"strings"
 
-	"github.com/bytedance/sonic"
 	"google.golang.org/genai"
 )
 
@@ -129,11 +129,11 @@ func (r *LLMRequest) SetOutputSchema(schema *genai.Schema) *LLMRequest {
 
 // ToJSON converts the request to a JSON string.
 func (r *LLMRequest) ToJSON() (string, error) {
-	s, err := sonic.ConfigFastest.MarshalToString(r)
-	if err != nil {
+	var out strings.Builder
+	if err := json.MarshalWrite(&out, r); err != nil {
 		return "", fmt.Errorf("failed to marshal LLMRequest to JSON: %w", err)
 	}
-	return s, nil
+	return out.String(), nil
 }
 
 // ToGenaiContents converts the LLMRequest contents to genai.Content slice.
