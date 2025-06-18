@@ -16,8 +16,7 @@ type RegionNotSupportedError struct {
 }
 
 func (e *RegionNotSupportedError) Error() string {
-	return fmt.Sprintf("Extensions API is not supported in region '%s'. Supported regions: %s",
-		e.RequestedRegion, strings.Join(e.SupportedRegions, ", "))
+	return fmt.Sprintf("extension API is not supported in region '%s'. supported regions: %s", e.RequestedRegion, strings.Join(e.SupportedRegions, ", "))
 }
 
 // ExtensionNotFoundError is returned when attempting to access
@@ -50,8 +49,7 @@ type ExecutionError struct {
 }
 
 func (e *ExecutionError) Error() string {
-	return fmt.Sprintf("extension execution failed for %s.%s: %s",
-		e.ExtensionName, e.OperationID, e.Message)
+	return fmt.Sprintf("extension execution failed for %s.%s: %s", e.ExtensionName, e.OperationID, e.Message)
 }
 
 // PrebuiltExtensionError is returned when there's an issue with
@@ -62,8 +60,7 @@ type PrebuiltExtensionError struct {
 }
 
 func (e *PrebuiltExtensionError) Error() string {
-	return fmt.Sprintf("prebuilt extension error for %s: %s",
-		e.ExtensionType, e.Message)
+	return fmt.Sprintf("prebuilt extension error for %s: %s", e.ExtensionType, e.Message)
 }
 
 // AuthenticationError is returned when there's an authentication

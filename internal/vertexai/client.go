@@ -91,7 +91,7 @@ func NewClient(ctx context.Context, projectID, location string, opts ...ClientOp
 	// Initialize content caching service
 	contentCacheService, err := caching.NewService(ctx, projectID, location, caching.WithLogger(client.logger))
 	if err != nil {
-		return nil, fmt.Errorf("failed to initialize content caching service: %w", err)
+		return nil, fmt.Errorf("failed to initialize caching service: %w", err)
 	}
 	client.cachingService = contentCacheService
 
@@ -105,7 +105,7 @@ func NewClient(ctx context.Context, projectID, location string, opts ...ClientOp
 	// Initialize generative models service
 	generativeService, err := generativemodel.NewService(ctx, projectID, location, generativemodel.WithLogger(client.logger))
 	if err != nil {
-		return nil, fmt.Errorf("failed to initialize generative models service: %w", err)
+		return nil, fmt.Errorf("failed to initialize generative model service: %w", err)
 	}
 	client.generativeService = generativeService
 
@@ -126,7 +126,7 @@ func NewClient(ctx context.Context, projectID, location string, opts ...ClientOp
 	// Initialize Prompts service
 	promptsService, err := prompt.NewService(ctx, projectID, location, prompt.WithLogger(client.logger))
 	if err != nil {
-		return nil, fmt.Errorf("failed to initialize Prompts service: %w", err)
+		return nil, fmt.Errorf("failed to initialize Prompt service: %w", err)
 	}
 	client.promptsService = promptsService
 
@@ -174,8 +174,8 @@ func (c *Client) Close() error {
 	c.logger.Info("Closing Vertex AI preview client")
 
 	if err := c.cachingService.Close(); err != nil {
-		c.logger.Error("Failed to close content caching service", slog.String("error", err.Error()))
-		return fmt.Errorf("failed to close content caching service: %w", err)
+		c.logger.Error("Failed to close caching service", slog.String("error", err.Error()))
+		return fmt.Errorf("failed to close caching service: %w", err)
 	}
 
 	if err := c.exampleStoreService.Close(); err != nil {
@@ -233,7 +233,7 @@ func (c *Client) Close() error {
 // These methods provide access to individual preview services while maintaining
 // the unified client context and configuration.
 
-// Caching returns the content caching service.
+// Caching returns the caching service.
 //
 // The content caching service provides optimized caching for large content
 // contexts, reducing token usage and improving performance for repeated queries.
@@ -381,16 +381,10 @@ func (c *Client) HealthCheck(ctx context.Context) error {
 func (c *Client) GetServiceStatus() map[string]string {
 	status := make(map[string]string)
 
-	if c.ragClient != nil {
-		status["rag"] = "initialized"
-	} else {
-		status["rag"] = "not_initialized"
-	}
-
 	if c.cachingService != nil {
-		status["content_caching"] = "initialized"
+		status["caching"] = "initialized"
 	} else {
-		status["content_caching"] = "not_initialized"
+		status["caching"] = "not_initialized"
 	}
 
 	if c.exampleStoreService != nil {
@@ -400,9 +394,9 @@ func (c *Client) GetServiceStatus() map[string]string {
 	}
 
 	if c.generativeService != nil {
-		status["generative_models"] = "initialized"
+		status["generative_model"] = "initialized"
 	} else {
-		status["generative_models"] = "not_initialized"
+		status["generative_model"] = "not_initialized"
 	}
 
 	if c.modelGardenService != nil {
@@ -412,15 +406,39 @@ func (c *Client) GetServiceStatus() map[string]string {
 	}
 
 	if c.extensionService != nil {
-		status["extensions"] = "initialized"
+		status["extension"] = "initialized"
 	} else {
-		status["extensions"] = "not_initialized"
+		status["extension"] = "not_initialized"
 	}
 
 	if c.promptsService != nil {
-		status["prompts"] = "initialized"
+		status["prompt"] = "initialized"
 	} else {
-		status["prompts"] = "not_initialized"
+		status["prompt"] = "not_initialized"
+	}
+
+	if c.ragClient != nil {
+		status["rag"] = "initialized"
+	} else {
+		status["rag"] = "not_initialized"
+	}
+
+	if c.evaluationService == nil {
+		status["evaluation"] = "initialized"
+	} else {
+		status["evaluation"] = "not_initialized"
+	}
+
+	if c.reasoningengineService == nil {
+		status["reasoning_engine"] = "initialized"
+	} else {
+		status["reasoning_engine"] = "not_initialized"
+	}
+
+	if c.tuningService == nil {
+		status["tuning"] = "initialized"
+	} else {
+		status["tuning"] = "not_initialized"
 	}
 
 	return status
