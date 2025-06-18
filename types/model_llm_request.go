@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/go-a2a/adk-go/internal/pool"
 	"google.golang.org/genai"
 )
 
@@ -129,11 +130,13 @@ func (r *LLMRequest) SetOutputSchema(schema *genai.Schema) *LLMRequest {
 
 // ToJSON converts the request to a JSON string.
 func (r *LLMRequest) ToJSON() (string, error) {
-	var out strings.Builder
-	if err := json.MarshalWrite(&out, r); err != nil {
+	sb := pool.String.Get()
+	if err := json.MarshalWrite(sb, r); err != nil {
 		return "", fmt.Errorf("failed to marshal LLMRequest to JSON: %w", err)
 	}
-	return out.String(), nil
+	out := sb.String()
+	pool.String.Put(sb)
+	return out, nil
 }
 
 // ToGenaiContents converts the LLMRequest contents to genai.Content slice.

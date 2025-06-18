@@ -4,11 +4,11 @@
 package types
 
 import (
-	"bytes"
 	"encoding/base64"
 	json "encoding/json/v2"
 	"time"
 
+	"github.com/go-a2a/adk-go/internal/pool"
 	"google.golang.org/genai"
 )
 
@@ -45,17 +45,20 @@ func EncodeContent(content *genai.Content) (map[string]any, error) {
 		return nil, nil
 	}
 
+	buf := pool.Buffer.Get()
+
 	// First, convert to JSON
-	var buf bytes.Buffer
-	if err := json.MarshalWrite(&buf, content); err != nil {
+	if err := json.MarshalWrite(buf, content); err != nil {
 		return nil, err
 	}
 
 	// Then unmarshal into a map
 	var result map[string]any
-	if err := json.UnmarshalRead(&buf, &result); err != nil {
+	if err := json.UnmarshalRead(buf, &result); err != nil {
 		return nil, err
 	}
+
+	pool.Buffer.Put(buf)
 
 	// Handle base64 encoding for inline data
 	if parts, ok := result["parts"].([]any); ok {
@@ -97,16 +100,17 @@ func DecodeContent(content map[string]any) (*genai.Content, error) {
 	}
 
 	// Convert map back to JSON
-	var buf bytes.Buffer
-	if err := json.MarshalWrite(&buf, content); err != nil {
+	buf := pool.Buffer.Get()
+	if err := json.MarshalWrite(buf, content); err != nil {
 		return nil, err
 	}
 
 	// Then unmarshal into a Content object
 	var result genai.Content
-	if err := json.UnmarshalRead(&buf, &result); err != nil {
+	if err := json.UnmarshalRead(buf, &result); err != nil {
 		return nil, err
 	}
+	pool.Buffer.Put(buf)
 
 	return &result, nil
 }

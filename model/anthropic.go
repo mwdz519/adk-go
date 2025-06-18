@@ -27,6 +27,7 @@ import (
 	anthropic_vertex "github.com/anthropics/anthropic-sdk-go/vertex"
 	"google.golang.org/genai"
 
+	"github.com/go-a2a/adk-go/internal/pool"
 	"github.com/go-a2a/adk-go/types"
 )
 
@@ -169,11 +170,12 @@ func (m *Claude) contentBlockToPart(contentBlock anthropic.ContentBlockUnion) (*
 
 // messageToGenerateContentResponse converts [*anthropic.Message] to [*LLMResponse].
 func (m *Claude) messageToGenerateContentResponse(ctx context.Context, message *anthropic.Message) *types.LLMResponse {
-	var sb strings.Builder
-	enc := jsontext.NewEncoder(&sb, jsontext.WithIndentPrefix("\t"), jsontext.WithIndent("  "))
+	sb := pool.String.Get() // for log output
+	enc := jsontext.NewEncoder(sb, jsontext.WithIndentPrefix("\t"), jsontext.WithIndent("  "))
 	if err := json.MarshalEncode(enc, message); err == nil {
 		m.logger.InfoContext(ctx, "Claude response", slog.String("response", sb.String()))
 	}
+	pool.String.Put(sb)
 
 	parts := make([]*genai.Part, 0, len(message.Content))
 	for _, content := range message.Content {
