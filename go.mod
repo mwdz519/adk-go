@@ -3,27 +3,28 @@ module github.com/go-a2a/adk-go
 go 1.24
 
 require (
-	cloud.google.com/go/aiplatform v1.90.0
+	cloud.google.com/go/aiplatform v1.91.0
 	cloud.google.com/go/auth v0.16.2
-	cloud.google.com/go/speech v1.27.1
+	cloud.google.com/go/speech v1.28.0
 	cloud.google.com/go/storage v1.55.0
 	github.com/MakeNowJust/heredoc/v2 v2.0.1
 	github.com/anthropics/anthropic-sdk-go v1.4.0
 	github.com/bytedance/sonic v1.13.3
 	github.com/docker/docker v28.2.2+incompatible
 	github.com/go-json-experiment/json v0.0.0-20250517221953-25912455fbc8
-	github.com/google/dotprompt/go v0.0.0-20250609041736-17a510ff51fd
+	github.com/google/dotprompt/go v0.0.0-20250614133328-417a534d0fc6
 	github.com/google/go-cmp v0.7.0
 	github.com/google/uuid v1.6.0
 	github.com/tiendc/go-deepcopy v1.6.1
 	golang.org/x/oauth2 v0.30.0
 	golang.org/x/sync v0.15.0
-	google.golang.org/api v0.236.0
-	google.golang.org/genai v1.10.0
+	google.golang.org/api v0.238.0
+	google.golang.org/genai v1.11.1
+	google.golang.org/protobuf v1.36.6
 )
 
 require (
-	cel.dev/expr v0.20.0 // indirect
+	cel.dev/expr v0.23.0 // indirect
 	cloud.google.com/go v0.121.1 // indirect
 	cloud.google.com/go/auth/oauth2adapt v0.2.8 // indirect
 	cloud.google.com/go/compute/metadata v0.7.0 // indirect
@@ -53,7 +54,7 @@ require (
 	github.com/bytedance/sonic/loader v0.2.4 // indirect
 	github.com/cespare/xxhash/v2 v2.3.0 // indirect
 	github.com/cloudwego/base64x v0.1.5 // indirect
-	github.com/cncf/xds/go v0.0.0-20250121191232-2f005788dc42 // indirect
+	github.com/cncf/xds/go v0.0.0-20250326154945-ae57f3c0d45f // indirect
 	github.com/containerd/errdefs v1.0.0 // indirect
 	github.com/containerd/errdefs/pkg v0.3.0 // indirect
 	github.com/containerd/log v0.1.0 // indirect
@@ -109,10 +110,9 @@ require (
 	golang.org/x/text v0.26.0 // indirect
 	golang.org/x/time v0.12.0 // indirect
 	google.golang.org/genproto v0.0.0-20250505200425-f936aa4a68b2 // indirect
-	google.golang.org/genproto/googleapis/api v0.0.0-20250528174236-200df99c418a // indirect
-	google.golang.org/genproto/googleapis/rpc v0.0.0-20250528174236-200df99c418a // indirect
-	google.golang.org/grpc v1.72.2 // indirect
-	google.golang.org/protobuf v1.36.6 // indirect
+	google.golang.org/genproto/googleapis/api v0.0.0-20250603155806-513f23925822 // indirect
+	google.golang.org/genproto/googleapis/rpc v0.0.0-20250603155806-513f23925822 // indirect
+	google.golang.org/grpc v1.73.0 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
 	gotest.tools/v3 v3.5.2 // indirect
 )
