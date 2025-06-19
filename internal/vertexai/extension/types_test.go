@@ -388,7 +388,7 @@ func TestVertexAISearchExecutionResponse_Fields(t *testing.T) {
 	if response.NextPageToken != "next_page_123" {
 		t.Errorf("NextPageToken = %v, want next_page_123", response.NextPageToken)
 	}
-	
+
 	// Test first result
 	firstResult := response.Results[0]
 	if firstResult.ID != "result1" {
