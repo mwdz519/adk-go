@@ -11,7 +11,7 @@ An open-source, code-first Go toolkit for building, evaluating, and deploying so
 [Installation](#install-adk-go) •
 [Quick Start](#%EF%B8%8F-architecture) •
 [Architecture](#%EF%B8%8F-architecture) •
-[Examples](#install-adk-go) •
+[Examples](#install-adk-go)
 
 </div>
 
