@@ -10,6 +10,7 @@ import (
 	"github.com/go-json-experiment/json"
 	"google.golang.org/genai"
 
+	"github.com/go-a2a/adk-go/internal/pool"
 	"github.com/go-a2a/adk-go/model"
 	"github.com/go-a2a/adk-go/tool"
 	"github.com/go-a2a/adk-go/types"
@@ -100,13 +101,15 @@ func (t *LoadArtifactsTool) appendArtifactsToLLMRequest(ctx context.Context, too
 	}
 
 	// Tell the model about the available artifacts.
-	data, err := json.Marshal(artifactNames)
-	if err != nil {
+	sb := pool.String.Get()
+	if err := json.MarshalWrite(sb, artifactNames, json.DefaultOptionsV2()); err != nil {
 		return err
 	}
+	s := sb.String()
+	pool.String.Put(sb)
 
 	instructions := `You have a list of artifacts:
-  ` + string(data) + `
+  ` + s + `
 
   When the user asks questions about any of the artifacts, you should call the
   ` + "`load_artifacts`" + ` function to load the artifact. Do not generate any text other

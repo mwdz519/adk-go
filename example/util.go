@@ -12,6 +12,7 @@ import (
 	"github.com/go-json-experiment/json"
 	"github.com/go-json-experiment/json/jsontext"
 
+	"github.com/go-a2a/adk-go/internal/pool"
 	"github.com/go-a2a/adk-go/model"
 )
 
@@ -39,6 +40,7 @@ func ConvertExamplesToText(examples []*Example, modelStr string) (string, error)
 		otuput      strings.Builder
 	)
 
+	sb := pool.String.Get()
 	for i, example := range examples {
 		otuput.Reset() // reuse
 
@@ -92,11 +94,11 @@ func ConvertExamplesToText(examples []*Example, modelStr string) (string, error)
 					if gemini2 != "" {
 						prefix = FunctionPrefix
 					}
-					data, err := json.Marshal(part.FunctionResponse, jsontext.SpaceAfterComma(true))
-					if err != nil {
+					sb.Reset()
+					if err := json.MarshalWrite(sb, part.FunctionResponse, jsontext.SpaceAfterComma(true)); err != nil {
 						return "", err
 					}
-					otuput.WriteString(fmt.Sprintf("%s%v%s", prefix, string(data), FunctionResponseSuffix))
+					otuput.WriteString(fmt.Sprintf("%s%v%s", prefix, sb.String(), FunctionResponseSuffix))
 
 				case part.Text != "":
 					otuput.WriteString(part.Text + "\n")
@@ -107,6 +109,7 @@ func ConvertExamplesToText(examples []*Example, modelStr string) (string, error)
 		otuput.WriteString(ExampleEnd)
 		examplesStr.WriteString(otuput.String())
 	}
+	pool.String.Put(sb)
 
 	return fmt.Sprintf("%s%s%s", ExamplesIntro, examplesStr.String(), ExamplesEnd), nil
 }

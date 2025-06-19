@@ -5,11 +5,12 @@ package types
 
 import (
 	"encoding/base64"
-	json "encoding/json/v2"
 	"time"
 
-	"github.com/go-a2a/adk-go/internal/pool"
+	"github.com/go-json-experiment/json"
 	"google.golang.org/genai"
+
+	"github.com/go-a2a/adk-go/internal/pool"
 )
 
 // Session represents a user session with events that can be stored in memory.
@@ -48,13 +49,13 @@ func EncodeContent(content *genai.Content) (map[string]any, error) {
 	buf := pool.Buffer.Get()
 
 	// First, convert to JSON
-	if err := json.MarshalWrite(buf, content); err != nil {
+	if err := json.MarshalWrite(buf, content, json.DefaultOptionsV2()); err != nil {
 		return nil, err
 	}
 
 	// Then unmarshal into a map
 	var result map[string]any
-	if err := json.UnmarshalRead(buf, &result); err != nil {
+	if err := json.UnmarshalRead(buf, &result, json.DefaultOptionsV2()); err != nil {
 		return nil, err
 	}
 
@@ -101,13 +102,13 @@ func DecodeContent(content map[string]any) (*genai.Content, error) {
 
 	// Convert map back to JSON
 	buf := pool.Buffer.Get()
-	if err := json.MarshalWrite(buf, content); err != nil {
+	if err := json.MarshalWrite(buf, content, json.DefaultOptionsV2()); err != nil {
 		return nil, err
 	}
 
 	// Then unmarshal into a Content object
 	var result genai.Content
-	if err := json.UnmarshalRead(buf, &result); err != nil {
+	if err := json.UnmarshalRead(buf, &result, json.DefaultOptionsV2()); err != nil {
 		return nil, err
 	}
 	pool.Buffer.Put(buf)

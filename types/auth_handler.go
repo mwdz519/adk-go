@@ -14,6 +14,8 @@ import (
 	"github.com/go-json-experiment/json"
 	deepcopy "github.com/tiendc/go-deepcopy"
 	"golang.org/x/oauth2"
+
+	"github.com/go-a2a/adk-go/internal/pool"
 )
 
 type AuthHandler struct {
@@ -189,25 +191,26 @@ func (h *AuthHandler) GetCredentialKey() string {
 	authCredential := h.authConfig.RawAuthCredential
 
 	var schemaName string
+	buf := pool.Buffer.Get()
 	if authScheme != nil {
 		schemaType := GetAuthSchemeType(authScheme)
-		schemaJSON, err := json.Marshal(authScheme)
-		if err != nil {
+		if err := json.MarshalWrite(buf, authScheme, json.DefaultOptionsV2()); err != nil {
 			panic(fmt.Errorf("marshal authScheme: %w", err))
 		}
-		hash := sha256.Sum256(schemaJSON)
+		hash := sha256.Sum256(buf.Bytes())
 		schemaName = fmt.Sprintf("%s_%s", schemaType, hash[:4])
 	}
 
 	var credentialName string
 	if authCredential != nil {
-		credJSON, err := json.Marshal(authCredential)
-		if err != nil {
+		buf.Reset()
+		if err := json.MarshalWrite(buf, authCredential, json.DefaultOptionsV2()); err != nil {
 			panic(fmt.Errorf("marshal authCredential: %w", err))
 		}
-		hash := sha256.Sum256(credJSON)
+		hash := sha256.Sum256(buf.Bytes())
 		credentialName = fmt.Sprintf("%s_%s", authCredential.AuthType, hash[:4])
 	}
+	pool.Buffer.Put(buf)
 
 	return fmt.Sprintf("temp:adk_%s_%s", schemaName, credentialName)
 }

@@ -11,6 +11,7 @@ import (
 	"github.com/go-json-experiment/json"
 
 	"github.com/go-a2a/adk-go/agent"
+	"github.com/go-a2a/adk-go/internal/pool"
 	"github.com/go-a2a/adk-go/internal/xiter"
 	"github.com/go-a2a/adk-go/types"
 	"github.com/go-a2a/adk-go/types/py"
@@ -96,6 +97,7 @@ func (p *AuthLLMRequestProcessor) Run(ctx context.Context, ictx *types.Invocatio
 		}
 
 		// Look for the system long running request euc function call
+		buf := pool.Buffer.Get()
 		for i := len(events) - 2; i >= 0; i-- {
 			event := events[i]
 			functionCalls := event.GetFunctionCalls()
@@ -112,13 +114,13 @@ func (p *AuthLLMRequestProcessor) Run(ctx context.Context, ictx *types.Invocatio
 
 				// Parse auth tool arguments
 				var args types.AuthToolArguments
-				data, err := json.Marshal(functionCall.Args, json.DefaultOptionsV2())
-				if err != nil {
+				buf.Reset()
+				if err := json.MarshalWrite(buf, functionCall.Args, json.DefaultOptionsV2()); err != nil {
 					p.logger.WarnContext(ctx, "Failed to marshal function call args", slog.String("function_call_id", functionCall.ID), slog.Any("error", err))
 					continue
 				}
 
-				if err := json.Unmarshal(data, &args, json.DefaultOptionsV2()); err != nil {
+				if err := json.UnmarshalRead(buf, &args, json.DefaultOptionsV2()); err != nil {
 					p.logger.WarnContext(ctx, "Failed to unmarshal auth tool arguments", slog.String("function_call_id", functionCall.ID), slog.Any("error", err))
 					continue
 				}

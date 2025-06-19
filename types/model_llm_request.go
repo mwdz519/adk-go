@@ -4,12 +4,13 @@
 package types
 
 import (
-	json "encoding/json/v2"
 	"fmt"
 	"strings"
 
-	"github.com/go-a2a/adk-go/internal/pool"
+	"github.com/go-json-experiment/json"
 	"google.golang.org/genai"
+
+	"github.com/go-a2a/adk-go/internal/pool"
 )
 
 // LLMRequest represents a LLM request class that allows passing in tools, output schema and system.
@@ -131,7 +132,7 @@ func (r *LLMRequest) SetOutputSchema(schema *genai.Schema) *LLMRequest {
 // ToJSON converts the request to a JSON string.
 func (r *LLMRequest) ToJSON() (string, error) {
 	sb := pool.String.Get()
-	if err := json.MarshalWrite(sb, r); err != nil {
+	if err := json.MarshalWrite(sb, r, json.DefaultOptionsV2()); err != nil {
 		return "", fmt.Errorf("failed to marshal LLMRequest to JSON: %w", err)
 	}
 	out := sb.String()

@@ -15,6 +15,7 @@ import (
 	"google.golang.org/genai"
 
 	"github.com/go-a2a/adk-go/flow/llmprocessor"
+	"github.com/go-a2a/adk-go/internal/pool"
 	"github.com/go-a2a/adk-go/internal/xiter"
 	"github.com/go-a2a/adk-go/model"
 	"github.com/go-a2a/adk-go/tool/tools"
@@ -443,11 +444,12 @@ func (a *LLMAgent) saveOutputToState(event *types.Event) error {
 
 		result := strings.Join(texts, "")
 		if a.outputSchema != nil {
-			data, err := json.Marshal(a.outputSchema)
-			if err != nil {
+			sb := pool.String.Get()
+			if err := json.MarshalWrite(sb, a.outputSchema, json.DefaultOptionsV2()); err != nil {
 				return err
 			}
-			result = string(data)
+			result = sb.String()
+			pool.String.Put(sb)
 		}
 		event.Actions.StateDelta[a.outputKey] = result
 	}

@@ -12,6 +12,8 @@ import (
 	"time"
 
 	"github.com/go-json-experiment/json"
+
+	"github.com/go-a2a/adk-go/internal/pool"
 )
 
 // CodeExecutor defines the interface for executing code in various environments.
@@ -290,14 +292,21 @@ func (f *CodeExecutionFile) IsBinary() bool {
 
 // MarshalJSON implements json.Marshaler to encode content as base64.
 func (f *CodeExecutionFile) MarshalJSON() ([]byte, error) {
+	buf := pool.Buffer.Get()
+
 	type Alias CodeExecutionFile
-	return json.Marshal(&struct {
+	err := json.MarshalWrite(buf, &struct {
 		Content string `json:"content"`
 		*Alias
 	}{
 		Content: base64.StdEncoding.EncodeToString(f.Content),
 		Alias:   (*Alias)(f),
 	}, json.DefaultOptionsV2())
+
+	out := buf.Bytes()
+	pool.Buffer.Put(buf)
+
+	return out, err
 }
 
 // UnmarshalJSON implements json.Unmarshaler to decode content from base64.

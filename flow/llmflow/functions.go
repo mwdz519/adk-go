@@ -18,6 +18,7 @@ import (
 	"google.golang.org/genai"
 
 	"github.com/go-a2a/adk-go/agent"
+	"github.com/go-a2a/adk-go/internal/pool"
 	"github.com/go-a2a/adk-go/internal/xmaps"
 	"github.com/go-a2a/adk-go/types"
 	"github.com/go-a2a/adk-go/types/py"
@@ -87,17 +88,20 @@ func GenerateAuthEvent(ctx context.Context, ictx *types.InvocationContext, funcR
 
 	var parts []*genai.Part
 	longRunningToolIDs := py.NewSet[string]()
+	buf := pool.Buffer.Get()
 	for funcCallID, config := range funcResponseEvent.Actions.RequestedAuthConfigs {
 		authToolArgs := &types.AuthToolArguments{
 			FunctionCallID: funcCallID,
 			AuthConfig:     config,
 		}
-		data, err := json.Marshal(authToolArgs, json.DefaultOptionsV2())
-		if err != nil {
+
+		buf.Reset() // reuse
+		if err := json.MarshalWrite(buf, authToolArgs, json.DefaultOptionsV2()); err != nil {
 			return nil, err
 		}
+
 		var m map[string]any
-		if err := json.Unmarshal(data, &m, json.DefaultOptionsV2()); err != nil {
+		if err := json.UnmarshalRead(buf, &m, json.DefaultOptionsV2()); err != nil {
 			return nil, err
 		}
 		requestEucFunctionCall := &genai.FunctionCall{
@@ -111,6 +115,7 @@ func GenerateAuthEvent(ctx context.Context, ictx *types.InvocationContext, funcR
 			FunctionCall: requestEucFunctionCall,
 		})
 	}
+	pool.Buffer.Put(buf)
 
 	return &types.Event{
 		LLMResponse: &types.LLMResponse{

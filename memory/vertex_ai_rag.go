@@ -14,6 +14,7 @@ import (
 	"github.com/go-json-experiment/json"
 	"google.golang.org/genai"
 
+	"github.com/go-a2a/adk-go/internal/pool"
 	"github.com/go-a2a/adk-go/internal/vertexai"
 	"github.com/go-a2a/adk-go/internal/vertexai/preview/rag"
 	"github.com/go-a2a/adk-go/types"
@@ -109,6 +110,7 @@ func (s *VertexAIRagService) AddSessionToMemory(ctx context.Context, session typ
 
 	// Extract text content from session events
 	var outputLines []string
+	sb := pool.String.Get()
 	for _, event := range session.Events() {
 		if event.Content == nil || len(event.Content.Parts) == 0 {
 			continue
@@ -132,13 +134,14 @@ func (s *VertexAIRagService) AddSessionToMemory(ctx context.Context, session typ
 				"session_id": session.ID(),
 			}
 
-			data, err := json.Marshal(eventData)
-			if err != nil {
+			sb.Reset()
+			if err := json.MarshalWrite(sb, eventData, json.DefaultOptionsV2()); err != nil {
 				return fmt.Errorf("failed to marshal event data: %w", err)
 			}
-			outputLines = append(outputLines, string(data))
+			outputLines = append(outputLines, sb.String())
 		}
 	}
+	pool.String.Put(sb)
 
 	if len(outputLines) == 0 {
 		s.logger.InfoContext(ctx, "No text content found in session, skipping upload")
@@ -214,7 +217,7 @@ func (s *VertexAIRagService) SearchMemory(ctx context.Context, appName, userID, 
 	for _, doc := range searchResp.Documents {
 		// Parse the document content back to extract event data
 		var eventData map[string]any
-		if err := json.Unmarshal([]byte(doc.Content), &eventData); err != nil {
+		if err := json.Unmarshal([]byte(doc.Content), &eventData, json.DefaultOptionsV2()); err != nil {
 			// If parsing fails, treat the content as plain text
 			s.logger.WarnContext(ctx, "Failed to parse document as JSON, treating as plain text",
 				slog.String("error", err.Error()),

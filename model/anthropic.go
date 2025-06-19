@@ -7,8 +7,6 @@ import (
 	"bytes"
 	"cmp"
 	"context"
-	"encoding/json/jsontext"
-	json "encoding/json/v2"
 	"errors"
 	"fmt"
 	"iter"
@@ -25,6 +23,8 @@ import (
 	"github.com/anthropics/anthropic-sdk-go/packages/param"
 	"github.com/anthropics/anthropic-sdk-go/shared/constant"
 	anthropic_vertex "github.com/anthropics/anthropic-sdk-go/vertex"
+	"github.com/go-json-experiment/json"
+	"github.com/go-json-experiment/json/jsontext"
 	"google.golang.org/genai"
 
 	"github.com/go-a2a/adk-go/internal/pool"
@@ -154,7 +154,7 @@ func (m *Claude) contentBlockToPart(contentBlock anthropic.ContentBlockUnion) (*
 			return nil, fmt.Errorf("input field must be non-nil: %#v", cBlock)
 		}
 		var args map[string]any
-		if err := json.UnmarshalRead(bytes.NewReader(cBlock.Input), args); err != nil {
+		if err := json.UnmarshalRead(bytes.NewReader(cBlock.Input), args, json.DefaultOptionsV2()); err != nil {
 			return nil, fmt.Errorf("unmarshal ToolUseBlock input: %w", err)
 		}
 		part := genai.NewPartFromFunctionCall(cBlock.Name, args)
