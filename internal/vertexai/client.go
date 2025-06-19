@@ -20,12 +20,10 @@ import (
 	"github.com/go-a2a/adk-go/internal/vertexai/prompt"
 )
 
-// Client provides unified access to all Vertex AI GA and preview functionality.
+// Client provides unified access to all Vertex AI functionality.
 //
-// The client orchestrates multiple specialized services to provide
-// comprehensive access to GA and and preview features of Vertex AI.
-// It maintains a single authentication context and configuration across
-// all preview services.
+// The client orchestrates multiple specialized services to provide comprehensive access to GA and preview features of Vertex AI.
+// It maintains a single authentication context and configuration across all services.
 type Client struct {
 	// Configuration
 	projectID string
@@ -47,28 +45,19 @@ type Client struct {
 	tuningService          *tuning.Service
 }
 
-// ClientOption is a functional option for configuring the preview client.
+// ClientOption is a functional option for configuring the client.
 type ClientOption func(*Client)
 
-// WithLogger sets a custom logger for the preview client.
+// WithLogger sets a custom logger for the client.
 func WithLogger(logger *slog.Logger) ClientOption {
 	return func(c *Client) {
 		c.logger = logger
 	}
 }
 
-// NewClient creates a new Vertex AI preview client.
+// NewClient creates a new Vertex AI [*Client].
 //
-// The client provides unified access to all preview services including RAG,
-// content caching, enhanced generative models, and Model Garden integration.
-//
-// Parameters:
-//   - ctx: Context for the initialization
-//   - projectID: Google Cloud project ID
-//   - location: Geographic location for Vertex AI services (e.g., "us-central1")
-//   - opts: Optional configuration options
-//
-// Returns a fully initialized preview client or an error if initialization fails.
+// The client provides unified access to all services including RAG, caching, enhanced generative models, and Model Garden integration.
 func NewClient(ctx context.Context, projectID, location string, opts ...ClientOption) (*Client, error) {
 	if projectID == "" {
 		return nil, fmt.Errorf("projectID is required")
@@ -88,12 +77,12 @@ func NewClient(ctx context.Context, projectID, location string, opts ...ClientOp
 		opt(client)
 	}
 
-	// Initialize content caching service
-	contentCacheService, err := caching.NewService(ctx, projectID, location, caching.WithLogger(client.logger))
+	// Initialize caching service
+	cacheService, err := caching.NewService(ctx, projectID, location, caching.WithLogger(client.logger))
 	if err != nil {
 		return nil, fmt.Errorf("failed to initialize caching service: %w", err)
 	}
-	client.cachingService = contentCacheService
+	client.cachingService = cacheService
 
 	// Initialize example store service
 	exampleStoreService, err := examplestore.NewService(ctx, projectID, location, examplestore.WithLogger(client.logger))
@@ -158,7 +147,7 @@ func NewClient(ctx context.Context, projectID, location string, opts ...ClientOp
 	}
 	client.tuningService = tuningService
 
-	client.logger.InfoContext(ctx, "Vertex AI preview client initialized successfully",
+	client.logger.InfoContext(ctx, "Vertex AI client initialized successfully",
 		slog.String("project_id", projectID),
 		slog.String("location", location),
 	)
@@ -166,12 +155,12 @@ func NewClient(ctx context.Context, projectID, location string, opts ...ClientOp
 	return client, nil
 }
 
-// Close closes the preview client and releases all resources.
+// Close closes the client and releases all resources.
 //
 // This method should be called when the client is no longer needed to ensure
 // proper cleanup of underlying connections and resources.
 func (c *Client) Close() error {
-	c.logger.Info("Closing Vertex AI preview client")
+	c.logger.Info("Closing Vertex AI client")
 
 	if err := c.cachingService.Close(); err != nil {
 		c.logger.Error("Failed to close caching service", slog.String("error", err.Error()))
@@ -224,13 +213,30 @@ func (c *Client) Close() error {
 		return fmt.Errorf("failed to close Tuning service: %w", err)
 	}
 
-	c.logger.Info("Vertex AI preview client closed successfully")
+	c.logger.Info("Vertex AI client closed successfully")
 	return nil
+}
+
+// Configuration Access Methods
+
+// GetProjectID returns the configured Google Cloud project ID.
+func (c *Client) GetProjectID() string {
+	return c.projectID
+}
+
+// GetLocation returns the configured geographic location.
+func (c *Client) GetLocation() string {
+	return c.location
+}
+
+// GetLogger returns the configured logger instance.
+func (c *Client) GetLogger() *slog.Logger {
+	return c.logger
 }
 
 // Service Access Methods
 //
-// These methods provide access to individual preview services while maintaining
+// These methods provide access to individual services while maintaining
 // the unified client context and configuration.
 
 // Caching returns the caching service.
@@ -251,7 +257,7 @@ func (c *Client) ExampleStore() *examplestore.Service {
 
 // GenerativeModel returns the enhanced generative models service.
 //
-// This service provides access to preview features for generative AI models,
+// This service provides access to features for generative AI models,
 // including advanced configuration options and experimental capabilities.
 func (c *Client) GenerativeModel() *generativemodel.Service {
 	return c.generativeService
@@ -304,33 +310,16 @@ func (c *Client) Tuning() *tuning.Service {
 	return c.tuningService
 }
 
-// Configuration Access Methods
-
-// GetProjectID returns the configured Google Cloud project ID.
-func (c *Client) GetProjectID() string {
-	return c.projectID
-}
-
-// GetLocation returns the configured geographic location.
-func (c *Client) GetLocation() string {
-	return c.location
-}
-
-// GetLogger returns the configured logger instance.
-func (c *Client) GetLogger() *slog.Logger {
-	return c.logger
-}
-
 // Health Check and Status Methods
 
-// HealthCheck performs a basic health check across all preview services.
+// HealthCheck performs a basic health check across all services.
 //
 // This method verifies that all underlying services are accessible and
 // functioning correctly. It's useful for monitoring and debugging.
 func (c *Client) HealthCheck(ctx context.Context) error {
-	c.logger.InfoContext(ctx, "Performing preview client health check")
+	c.logger.InfoContext(ctx, "Performing client health check")
 
-	// Note: In a full implementation, you would perform actual health checks
+	// TODO(zchee): In a full implementation, you would perform actual health checks
 	// against each service. For now, we just verify the services are initialized.
 
 	if c.cachingService == nil {
@@ -377,7 +366,7 @@ func (c *Client) HealthCheck(ctx context.Context) error {
 	return nil
 }
 
-// GetServiceStatus returns the status of all preview services.
+// GetServiceStatus returns the status of all services.
 func (c *Client) GetServiceStatus() map[string]string {
 	status := make(map[string]string)
 
