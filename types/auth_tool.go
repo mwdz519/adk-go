@@ -30,6 +30,16 @@ type AuthConfig struct {
 	// this field to guide the user through the OAuth2 flow and fill auth response in
 	// this field.
 	ExchangedAuthCredential *AuthCredential
+
+	// A user specified key used to load and save this credential in a credential
+	// service.
+	credentialKey string
+}
+
+// CredentialKey builds a hash key based on auth_scheme and raw_auth_credential used to
+// save / load this credential to / from a credentials service.
+func (ac *AuthConfig) CredentialKey() string {
+	return NewAuthHandler(ac).GetCredentialKey()
 }
 
 // AuthToolArguments response an arguments for the special long running function tool that is used to
