@@ -18,7 +18,7 @@ require (
 	golang.org/x/oauth2 v0.30.0
 	golang.org/x/sync v0.15.0
 	google.golang.org/api v0.238.0
-	google.golang.org/genai v1.11.1
+	google.golang.org/genai v1.12.0
 	google.golang.org/protobuf v1.36.6
 )
 
