@@ -1,4 +1,4 @@
-# ADK-Go: Agent Development Kit for Go
+# adk-go: Agent Development Kit for Go
 
 <div align="center">
 
@@ -450,8 +450,7 @@ adk-go/
 ├── session/         # Session management and state tracking
 ├── tool/            # Tool framework and implementations
 ├── types/           # Core interfaces and type definitions
-├── internal/        # Internal utilities (pool, iterators, maps)
-└── third_party/     # Python ADK reference implementation
+└── internal/        # Internal utilities (pool, iterators, maps)
 ```
 
 ### Contributing
@@ -482,12 +481,14 @@ adk-go/
 
 ## 🔗 Related Projects
 
-This is a Go implementation of the [Agent Development Kit (ADK)](https://github.com/google/adk-python), a toolkit for building, evaluating, and deploying sophisticated AI agents. ADK-Go follows the same architectural principles as the Python implementation, but with Go's strengths of type safety, performance, and concurrency.
+This is a Go implementation of the [Agent Development Kit (ADK)](https://github.com/google/adk-python), a toolkit for building, evaluating, and deploying sophisticated AI agents.
+
+adk-go follows the same architectural principles as the Python implementation, but with Go's strengths of type safety, performance, and concurrency.
 
 ## 🙏 Acknowledgments
 
-- Built on top of [google.golang.org/genai](https://pkg.go.dev/google.golang.org/genai) for unified LLM integration
 - Inspired by the [Agent Development Kit for Python](https://github.com/googleapis/agent-development-kit)
+- Built on top of [google.golang.org/genai](https://pkg.go.dev/google.golang.org/genai) for unified LLM integration
 
 ## 📄 License
 
