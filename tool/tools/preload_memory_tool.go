@@ -21,12 +21,14 @@ type PreloadMemoryTool struct {
 
 var _ types.Tool = (*PreloadMemoryTool)(nil)
 
+// NewPreloadMemoryTool returns the new [PreloadMemoryTool].
 func NewPreloadMemoryTool() *PreloadMemoryTool {
 	return &PreloadMemoryTool{
 		Tool: tool.NewTool("preload_memory", "preload_memory", false),
 	}
 }
 
+// ProcessLLMRequest implements [types.Tool].
 func (t *PreloadMemoryTool) ProcessLLMRequest(ctx context.Context, toolCtx *types.ToolContext, request *types.LLMRequest) error {
 	userContent := toolCtx.UserContent()
 	if userContent == nil || len(userContent.Parts) == 0 || userContent.Parts[0].Text == "" {
