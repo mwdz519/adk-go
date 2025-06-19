@@ -24,6 +24,7 @@ An open-source, code-first Go toolkit for building, evaluating, and deploying so
 
 ## 🌟 Features
 
+- **⚡️ Fully compatible with the official SDK**: Fully emulates the Python implementation of [adk-python](https://github.com/google/adk-python).
 - **🤖 Multi-Agent Architecture**: Build hierarchical agent systems with LLM, Sequential, Parallel, and Loop agents
 - **🔗 Multi-Provider Support**: Unified interface for Google Gemini, Anthropic Claude, and more via `google.golang.org/genai`
 - **🛠️ Extensible Tools**: Rich ecosystem of tools with automatic function calling and authentication
