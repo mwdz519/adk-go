@@ -6,6 +6,7 @@ package extension
 import (
 	"context"
 	"fmt"
+	"slices"
 )
 
 // getPrebuiltExtensionConfig returns the manifest and runtime configuration
@@ -86,7 +87,7 @@ func (s *Service) getPrebuiltDescription(extensionType PrebuiltExtensionType) st
 
 // CreateCodeInterpreterExtension creates a code interpreter extension with default configuration.
 func (s *Service) CreateCodeInterpreterExtension(ctx context.Context) (*Extension, error) {
-	return s.CreateFromHub(ctx, PrebuiltExtensionCodeInterpreter)
+	return s.CreateFromHub(ctx, string(PrebuiltExtensionCodeInterpreter), nil)
 }
 
 // CreateVertexAISearchExtension creates a Vertex AI Search extension with the specified serving config.
@@ -108,14 +109,7 @@ func (s *Service) CreateVertexAISearchExtension(ctx context.Context, servingConf
 		vertexSearchConfig.ServingConfigName = servingConfigName
 	}
 
-	req := &CreateExtensionRequest{
-		DisplayName:   s.getPrebuiltDisplayName(PrebuiltExtensionVertexAISearch),
-		Description:   s.getPrebuiltDescription(PrebuiltExtensionVertexAISearch),
-		Manifest:      manifest,
-		RuntimeConfig: runtimeConfig,
-	}
-
-	return s.CreateExtension(ctx, req)
+	return s.CreateExtension(ctx, manifest, servingConfigName, s.getPrebuiltDisplayName(PrebuiltExtensionVertexAISearch), s.getPrebuiltDescription(PrebuiltExtensionVertexAISearch), runtimeConfig)
 }
 
 // GetSupportedPrebuiltExtensions returns a list of supported prebuilt extension types.
@@ -129,10 +123,8 @@ func (s *Service) GetSupportedPrebuiltExtensions() []PrebuiltExtensionType {
 // ValidatePrebuiltExtensionType validates that the extension type is supported.
 func (s *Service) ValidatePrebuiltExtensionType(extensionType PrebuiltExtensionType) error {
 	supported := s.GetSupportedPrebuiltExtensions()
-	for _, supportedType := range supported {
-		if extensionType == supportedType {
-			return nil
-		}
+	if slices.Contains(supported, extensionType) {
+		return nil
 	}
 
 	return &PrebuiltExtensionError{
