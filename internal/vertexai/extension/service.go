@@ -15,6 +15,8 @@ import (
 	aiplatform "cloud.google.com/go/aiplatform/apiv1beta1"
 	"cloud.google.com/go/aiplatform/apiv1beta1/aiplatformpb"
 	"google.golang.org/api/option"
+
+	"github.com/go-a2a/adk-go/pkg/logging"
 )
 
 var VertexExtensionHub = map[PrebuiltExtensionType]*aiplatformpb.ImportExtensionRequest{
@@ -89,7 +91,7 @@ type Service interface {
 	ExecuteExtension(ctx context.Context, req *aiplatformpb.ExecuteExtensionRequest) (*aiplatformpb.ExecuteExtensionResponse, error)
 
 	// CreateFromHub creates an extension from Google's prebuilt extension hub.
-	CreateFromHub(ctx context.Context, extensionType PrebuiltExtensionType) (*Extension, error)
+	CreateFromHub(ctx context.Context, extensionType PrebuiltExtensionType, runtimeConfig *aiplatformpb.RuntimeConfig) (*Extension, error)
 
 	// ListExtensions lists all extensions in the project and location.
 	ListExtensions(ctx context.Context, req *aiplatformpb.ListExtensionsRequest) (*aiplatformpb.ListExtensionsResponse, error)
@@ -105,12 +107,6 @@ type Service interface {
 
 	// ExecuteVertexAISearch executes a Vertex AI Search operation with simplified parameters.
 	ExecuteVertexAISearch(ctx context.Context, extensionName, query string, maxResults int32) (*VertexAISearchExecutionResponse, error)
-
-	// CreateCodeInterpreterExtension creates a code interpreter extension with default configuration.
-	CreateCodeInterpreterExtension(ctx context.Context) (*Extension, error)
-
-	// CreateVertexAISearchExtension creates a Vertex AI Search extension with the specified serving config.
-	CreateVertexAISearchExtension(ctx context.Context, servingConfigName string) (*Extension, error)
 
 	// GetSupportedPrebuiltExtensions returns a list of supported prebuilt extension types.
 	GetSupportedPrebuiltExtensions() []PrebuiltExtensionType
@@ -172,7 +168,7 @@ func NewService(ctx context.Context, projectID, location string, opts ...option.
 	service := &service{
 		projectID: projectID,
 		location:  location,
-		logger:    slog.Default(),
+		logger:    logging.FromContext(ctx),
 	}
 
 	extensionExecutionClient, err := aiplatform.NewExtensionExecutionClient(ctx, opts...)
@@ -298,15 +294,16 @@ func (s *service) ExecuteExtension(ctx context.Context, req *aiplatformpb.Execut
 //
 // This method provides easy access to Google's curated extensions like
 // code_interpreter and vertex_ai_search without requiring manual manifest creation.
-func (s *service) CreateFromHub(ctx context.Context, extensionType PrebuiltExtensionType) (*Extension, error) {
-	s.logger.InfoContext(ctx, "Creating extension from hub", slog.String("name", string(extensionType)))
+func (s *service) CreateFromHub(ctx context.Context, extensionType PrebuiltExtensionType, runtimeConfig *aiplatformpb.RuntimeConfig) (*Extension, error) {
+	s.logger.InfoContext(ctx, "Creating extension from hub", slog.String("extension_type", string(extensionType)))
 
 	extensionInfo := VertexExtensionHub[extensionType]
+	extensionInfo.Extension.RuntimeConfig = runtimeConfig
 
 	switch extensionType {
 	case "code_interpreter":
 		if _, ok := extensionInfo.GetExtension().GetRuntimeConfig().GetGoogleFirstPartyExtensionConfig().(*aiplatformpb.RuntimeConfig_CodeInterpreterRuntimeConfig_); !ok {
-			return nil, errors.New("code_interpreter_runtime_config is required for code_interpreter extension")
+			return nil, errors.New("runtime_config is required for code_interpreter extension")
 		}
 	case "vertex_ai_search":
 		if extensionInfo.GetExtension().GetRuntimeConfig() == nil {

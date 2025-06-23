@@ -88,8 +88,8 @@ func (s *service) getPrebuiltDescription(extensionType PrebuiltExtensionType) st
 }
 
 // CreateCodeInterpreterExtension creates a code interpreter extension with default configuration.
-func (s *service) CreateCodeInterpreterExtension(ctx context.Context) (*Extension, error) {
-	return s.CreateFromHub(ctx, PrebuiltExtensionCodeInterpreter)
+func (s *service) CreateCodeInterpreterExtension(ctx context.Context, inputBucket, outputBucket string) (*Extension, error) {
+	return s.CreateFromHub(ctx, PrebuiltExtensionCodeInterpreter, NewCodeInterpreterRuntimeConfig(inputBucket, outputBucket))
 }
 
 // CreateVertexAISearchExtension creates a Vertex AI Search extension with the specified serving config.

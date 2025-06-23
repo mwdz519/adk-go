@@ -12,6 +12,8 @@ import (
 
 	aiplatform "cloud.google.com/go/aiplatform/apiv1beta1"
 	"google.golang.org/api/option"
+
+	"github.com/go-a2a/adk-go/pkg/logging"
 )
 
 // Service provides comprehensive prompt management functionality for Vertex AI.
@@ -120,7 +122,7 @@ func NewService(ctx context.Context, projectID, location string, opts ...option.
 	service := &service{
 		projectID:      projectID,
 		location:       location,
-		logger:         slog.Default(),
+		logger:         logging.FromContext(ctx),
 		promptCache:    make(map[string]*Prompt),
 		versionCache:   make(map[string][]*PromptVersion),
 		cacheExpiry:    30 * time.Minute,

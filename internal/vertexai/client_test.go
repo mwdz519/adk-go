@@ -6,6 +6,12 @@ package vertexai
 import (
 	"log/slog"
 	"testing"
+
+	nooptrace "go.opentelemetry.io/otel/trace/noop"
+	"google.golang.org/api/option"
+	"google.golang.org/api/option/internaloption"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 )
 
 func TestNewClient(t *testing.T) {
@@ -15,7 +21,7 @@ func TestNewClient(t *testing.T) {
 		name      string
 		projectID string
 		location  string
-		opts      []ClientOption
+		opts      []option.ClientOption
 		wantErr   bool
 	}{
 		{
@@ -29,7 +35,7 @@ func TestNewClient(t *testing.T) {
 			name:      "with custom logger",
 			projectID: "test-project",
 			location:  "us-central1",
-			opts:      []ClientOption{WithLogger(slog.Default())},
+			opts:      []option.ClientOption{WithTracerProvider(nooptrace.NewTracerProvider())},
 			wantErr:   false,
 		},
 		{
@@ -77,7 +83,7 @@ func TestNewClient(t *testing.T) {
 					t.Error("RAG service not initialized")
 				}
 
-				if client.Caching() == nil {
+				if client.Cache() == nil {
 					t.Error("ContentCaching service not initialized")
 				}
 
@@ -112,18 +118,46 @@ func TestClient_HealthCheck(t *testing.T) {
 	}
 }
 
+type slogOption struct {
+	*internaloption.EmbeddableAdapter
+	*slog.Logger
+}
+
+func (o slogOption) apply(c *Client) {
+	c.logger = o.Logger
+}
+
+// withLogger sets the [*slog.Logger] for the client.
+//
+// This function for the testing.
+func withLogger(logger *slog.Logger) option.ClientOption {
+	return slogOption{Logger: logger}
+}
+
 func TestClient_GetServiceStatus(t *testing.T) {
 	ctx := t.Context()
 
-	client, err := NewClient(ctx, "test-project", "us-central1")
+	client, err := NewClient(ctx, "test-project", "us-central1", withLogger(slog.Default()))
 	if err != nil {
 		t.Fatalf("Failed to create client: %v", err)
 	}
 	defer client.Close()
+	client.logger = slog.Default()
 
 	status := client.GetServiceStatus()
 
-	expectedServices := []string{"rag", "content_caching", "generative_models", "model_garden"}
+	expectedServices := []string{
+		"cache",
+		"example_store",
+		"generative_model",
+		"model_garden",
+		"extension",
+		"prompt",
+		"rag",
+		"evaluation",
+		"reasoning_engine",
+		"tuning",
+	}
 	for _, service := range expectedServices {
 		if _, ok := status[service]; !ok {
 			t.Errorf("Service %s not found in status", service)
@@ -132,21 +166,6 @@ func TestClient_GetServiceStatus(t *testing.T) {
 		if status[service] != "initialized" {
 			t.Errorf("Service %s status = %v, want initialized", service, status[service])
 		}
-	}
-}
-
-func TestClientOption_WithLogger(t *testing.T) {
-	ctx := t.Context()
-	customLogger := slog.Default()
-
-	client, err := NewClient(ctx, "test-project", "us-central1", WithLogger(customLogger))
-	if err != nil {
-		t.Fatalf("Failed to create client: %v", err)
-	}
-	defer client.Close()
-
-	if got := client.GetLogger(); got != customLogger {
-		t.Errorf("GetLogger() = %v, want %v", got, customLogger)
 	}
 }
 
@@ -177,18 +196,9 @@ func TestClient_ServiceAccess(t *testing.T) {
 	})
 
 	t.Run("ContentCaching service", func(t *testing.T) {
-		service := client.Caching()
+		service := client.Cache()
 		if service == nil {
 			t.Error("ContentCaching() returned nil")
-		}
-
-		// Verify the service has correct configuration
-		if got := service.GetProjectID(); got != "test-project" {
-			t.Errorf("ContentCaching service project ID = %v, want test-project", got)
-		}
-
-		if got := service.GetLocation(); got != "us-central1" {
-			t.Errorf("ContentCaching service location = %v, want us-central1", got)
 		}
 	})
 
@@ -213,15 +223,6 @@ func TestClient_ServiceAccess(t *testing.T) {
 		if service == nil {
 			t.Error("ModelGarden() returned nil")
 		}
-
-		// Verify the service has correct configuration
-		if got := service.GetProjectID(); got != "test-project" {
-			t.Errorf("ModelGarden service project ID = %v, want test-project", got)
-		}
-
-		if got := service.GetLocation(); got != "us-central1" {
-			t.Errorf("ModelGarden service location = %v, want us-central1", got)
-		}
 	})
 }
 
@@ -239,7 +240,7 @@ func TestClient_Close(t *testing.T) {
 	}
 
 	// Test multiple close calls (should not error)
-	if err := client.Close(); err != nil {
+	if err := client.Close(); status.Convert(err).Code() != codes.Canceled {
 		t.Errorf("Second Close() error = %v", err)
 	}
 }

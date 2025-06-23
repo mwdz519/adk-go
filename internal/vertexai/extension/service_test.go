@@ -46,7 +46,7 @@ func TestNewService(t *testing.T) {
 			projectID:   "test-project",
 			location:    "us-east1",
 			wantErr:     true,
-			expectedErr: "Extensions API is not supported in region 'us-east1'",
+			expectedErr: "extension API is not supported in region 'us-east1'",
 		},
 	}
 
@@ -91,6 +91,8 @@ func TestNewService(t *testing.T) {
 }
 
 func TestService_CreateExtension(t *testing.T) {
+	t.Skip("requires Google Cloud credentials and existing corpus")
+
 	ctx := t.Context()
 	service, err := NewService(ctx, "test-project", "us-central1")
 	if err != nil {
@@ -250,6 +252,8 @@ func TestService_CreateExtension(t *testing.T) {
 }
 
 func TestService_CreateFromHub(t *testing.T) {
+	t.Skip("requires Google Cloud credentials and existing corpus")
+
 	ctx := t.Context()
 	service, err := NewService(ctx, "test-project", "us-central1")
 	if err != nil {
@@ -260,12 +264,21 @@ func TestService_CreateFromHub(t *testing.T) {
 	tests := []struct {
 		name          string
 		extensionType PrebuiltExtensionType
+		runtimeConfig *aiplatformpb.RuntimeConfig
 		wantErr       bool
 	}{
 		{
 			name:          "code interpreter",
 			extensionType: PrebuiltExtensionCodeInterpreter,
-			wantErr:       false,
+			runtimeConfig: &aiplatformpb.RuntimeConfig{
+				GoogleFirstPartyExtensionConfig: &aiplatformpb.RuntimeConfig_CodeInterpreterRuntimeConfig_{
+					CodeInterpreterRuntimeConfig: &aiplatformpb.RuntimeConfig_CodeInterpreterRuntimeConfig{
+						FileInputGcsBucket:  "test-input-bucket",
+						FileOutputGcsBucket: "test-output-bucket",
+					},
+				},
+			},
+			wantErr: false,
 		},
 		{
 			name:          "vertex ai search",
@@ -286,7 +299,7 @@ func TestService_CreateFromHub(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			ext, err := service.CreateFromHub(ctx, tt.extensionType)
+			ext, err := service.CreateFromHub(ctx, tt.extensionType, tt.runtimeConfig)
 
 			if tt.wantErr {
 				if err == nil {

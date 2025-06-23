@@ -14,6 +14,8 @@ import (
 	aiplatform "cloud.google.com/go/aiplatform/apiv1beta1"
 	"google.golang.org/api/option"
 	"google.golang.org/genai"
+
+	"github.com/go-a2a/adk-go/pkg/logging"
 )
 
 // Service provides enhanced generative model capabilities for Vertex AI.
@@ -76,7 +78,7 @@ func NewService(ctx context.Context, projectID, location string, opts ...option.
 	service := &service{
 		projectID: projectID,
 		location:  location,
-		logger:    slog.Default(),
+		logger:    logging.FromContext(ctx),
 	}
 
 	// Create prediction service client for enhanced generative models

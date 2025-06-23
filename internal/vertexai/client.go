@@ -8,19 +8,23 @@ import (
 	"fmt"
 	"log/slog"
 
+	aiplatform "cloud.google.com/go/aiplatform/apiv1beta1"
 	"cloud.google.com/go/auth/credentials"
+	"go.opentelemetry.io/contrib/bridges/otelslog"
+	"go.opentelemetry.io/otel/log"
+	nooplog "go.opentelemetry.io/otel/log/noop"
+	"go.opentelemetry.io/otel/metric"
+	noopmetric "go.opentelemetry.io/otel/metric/noop"
+	"go.opentelemetry.io/otel/trace"
+	nooptrace "go.opentelemetry.io/otel/trace/noop"
 	"google.golang.org/api/option"
+	"google.golang.org/api/option/internaloption"
 
-	"github.com/go-a2a/adk-go/internal/vertexai/caching"
-	"github.com/go-a2a/adk-go/internal/vertexai/examplestore"
 	"github.com/go-a2a/adk-go/internal/vertexai/extension"
 	"github.com/go-a2a/adk-go/internal/vertexai/generativemodel"
-	"github.com/go-a2a/adk-go/internal/vertexai/modelgarden"
-	"github.com/go-a2a/adk-go/internal/vertexai/preview/evaluation"
 	"github.com/go-a2a/adk-go/internal/vertexai/preview/rag"
-	"github.com/go-a2a/adk-go/internal/vertexai/preview/reasoningengine"
-	"github.com/go-a2a/adk-go/internal/vertexai/preview/tuning"
 	"github.com/go-a2a/adk-go/internal/vertexai/prompt"
+	"github.com/go-a2a/adk-go/pkg/logging"
 )
 
 // Client provides unified access to all Vertex AI functionality.
@@ -28,40 +32,82 @@ import (
 // The client orchestrates multiple specialized services to provide comprehensive access to GA and preview features of Vertex AI.
 // It maintains a single authentication context and configuration across all services.
 type Client struct {
-	// Configuration
+	// Base configuration
 	projectID string
 	location  string
-	logger    *slog.Logger
+
+	// telemetry providers
+	tracerProvider trace.TracerProvider
+	meterProvider  metric.MeterProvider
+	loggerProvider log.LoggerProvider
+	logger         *slog.Logger
 
 	// Core services
-	cachingService      caching.Service
-	exampleStoreService examplestore.Service
-	generativeService   generativemodel.Service
-	modelGardenService  modelgarden.Service
-	extensionService    extension.Service
-	promptsService      prompt.Service
+	cacheClient        *aiplatform.GenAiCacheClient
+	exampleStoreClient *aiplatform.ExampleStoreClient
+	generativeService  generativemodel.Service
+	modelGardenClient  *aiplatform.ModelGardenClient
+	extensionService   extension.Service
+	promptsService     prompt.Service
 
 	// Previwe services
-	ragClient              *rag.Service
-	evaluationService      evaluation.Service
-	reasoningengineService reasoningengine.Service
-	tuningService          tuning.Service
+	ragClient             *rag.Service
+	evaluationClient      *aiplatform.EvaluationClient
+	reasoningengineClient *aiplatform.ReasoningEngineClient
+	tuningClient          *aiplatform.GenAiTuningClient
 }
 
 // ClientOption is a functional option for configuring the client.
-type ClientOption func(*Client)
+type ClientOption interface {
+	apply(*Client)
+}
 
-// WithLogger sets a custom logger for the client.
-func WithLogger(logger *slog.Logger) ClientOption {
-	return func(c *Client) {
-		c.logger = logger
-	}
+type tracerOption struct {
+	*internaloption.EmbeddableAdapter
+	trace.TracerProvider
+}
+
+func (o tracerOption) apply(c *Client) {
+	c.tracerProvider = o.TracerProvider
+}
+
+// WithTracerProvider sets the [trace.TracerProvider] for the client.
+func WithTracerProvider(tracer trace.TracerProvider) option.ClientOption {
+	return tracerOption{TracerProvider: tracer}
+}
+
+type meterOption struct {
+	*internaloption.EmbeddableAdapter
+	metric.MeterProvider
+}
+
+func (o meterOption) apply(c *Client) {
+	c.meterProvider = o.MeterProvider
+}
+
+// WithMeterProvider sets the [metric.MeterProvider] for the client.
+func WithMeterProvider(meter metric.MeterProvider) option.ClientOption {
+	return meterOption{MeterProvider: meter}
+}
+
+type loggerOption struct {
+	*internaloption.EmbeddableAdapter
+	log.LoggerProvider
+}
+
+func (o loggerOption) apply(c *Client) {
+	c.loggerProvider = o.LoggerProvider
+}
+
+// WithLoggerProvider sets the [log.LoggerProvider] for the client.
+func WithLoggerProvider(logger log.LoggerProvider) option.ClientOption {
+	return loggerOption{LoggerProvider: logger}
 }
 
 // NewClient creates a new Vertex AI [*Client].
 //
 // The client provides unified access to all services including RAG, caching, enhanced generative models, and Model Garden integration.
-func NewClient(ctx context.Context, projectID, location string, opts ...ClientOption) (*Client, error) {
+func NewClient(ctx context.Context, projectID, location string, options ...option.ClientOption) (*Client, error) {
 	if projectID == "" {
 		return nil, fmt.Errorf("projectID is required")
 	}
@@ -69,96 +115,137 @@ func NewClient(ctx context.Context, projectID, location string, opts ...ClientOp
 		return nil, fmt.Errorf("location is required")
 	}
 
-	client := &Client{
-		projectID: projectID,
-		location:  location,
-		logger:    slog.Default(),
+	// Apply options
+	opts := make([]ClientOption, 0, len(options))
+	copts := make([]option.ClientOption, 0, len(options))
+	for _, opt := range options {
+		switch o := opt.(type) {
+		case ClientOption:
+			opts = append(opts, o)
+		case option.ClientOption:
+			copts = append(copts, o)
+		}
 	}
+
+	client := &Client{
+		projectID:      projectID,
+		location:       location,
+		tracerProvider: nooptrace.NewTracerProvider(),
+		meterProvider:  noopmetric.NewMeterProvider(),
+		loggerProvider: nooplog.NewLoggerProvider(),
+	}
+	for _, o := range opts {
+		o.apply(client)
+	}
+	logger := otelslog.NewLogger("github.com/go-a2a/adk-go/internal/vertexai", otelslog.WithLoggerProvider(client.loggerProvider))
+	if client.logger == nil {
+		client.logger = logger
+	}
+	copts = append(copts, option.WithLogger(logger))
+	ctx = logging.NewContext(ctx, logger)
 
 	// Create credentials
 	creds, err := credentials.DetectDefault(&credentials.DetectOptions{
-		Scopes: []string{
-			"https://www.googleapis.com/auth/cloud-platform",
-		},
+		Scopes: aiplatform.DefaultAuthScopes(),
 	})
 	if err != nil {
-		return nil, fmt.Errorf("failed to detect default credentials: %w", err)
+		return nil, fmt.Errorf("detect default credentials: %w", err)
 	}
+	copts = append(copts, option.WithAuthCredentials(creds))
 
-	// Apply options
-	for _, opt := range opts {
-		opt(client)
-	}
-
-	// Initialize caching service
-	cacheService, err := caching.NewService(ctx, projectID, location, option.WithAuthCredentials(creds))
+	// Initialize GenAI cache service client
+	cacheClient, err := aiplatform.NewGenAiCacheClient(ctx, copts...)
 	if err != nil {
-		return nil, fmt.Errorf("failed to initialize caching service: %w", err)
+		return nil, fmt.Errorf("initialize GenAI cache service: %w", err)
 	}
-	client.cachingService = cacheService
+	client.logger.InfoContext(ctx, "GenAI cache service initialized successfully",
+		slog.String("project_id", projectID),
+		slog.String("location", location),
+	)
+	client.cacheClient = cacheClient
 
-	// Initialize example store service
-	exampleStoreService, err := examplestore.NewService(ctx, projectID, location, option.WithAuthCredentials(creds))
+	// Initialize example store service client
+	exampleStoreClient, err := aiplatform.NewExampleStoreClient(ctx, copts...)
 	if err != nil {
-		return nil, fmt.Errorf("failed to initialize example store service: %w", err)
+		return nil, fmt.Errorf("initialize example store service client: %w", err)
 	}
-	client.exampleStoreService = exampleStoreService
+	client.logger.InfoContext(ctx, "Example Store service initialized successfully",
+		slog.String("project_id", projectID),
+		slog.String("location", location),
+	)
+	client.exampleStoreClient = exampleStoreClient
 
 	// Initialize generative models service
-	generativeService, err := generativemodel.NewService(ctx, projectID, location, option.WithAuthCredentials(creds))
+	generativeService, err := generativemodel.NewService(ctx, projectID, location, copts...)
 	if err != nil {
-		return nil, fmt.Errorf("failed to initialize generative model service: %w", err)
+		return nil, fmt.Errorf("initialize generative model service: %w", err)
 	}
 	client.generativeService = generativeService
 
-	// Initialize Model Garden service
-	modelGardenService, err := modelgarden.NewService(ctx, projectID, location, option.WithAuthCredentials(creds))
+	// Initialize model garden service client
+	modelGardenClient, err := aiplatform.NewModelGardenClient(ctx, copts...)
 	if err != nil {
-		return nil, fmt.Errorf("failed to initialize Model Garden service: %w", err)
+		return nil, fmt.Errorf("initialize Model Garden service: %w", err)
 	}
-	client.modelGardenService = modelGardenService
+	client.logger.InfoContext(ctx, "Model Garden service initialized successfully",
+		slog.String("project_id", projectID),
+		slog.String("location", location),
+	)
+	client.modelGardenClient = modelGardenClient
 
 	// Initialize Extension service
-	extensionService, err := extension.NewService(ctx, projectID, location, option.WithAuthCredentials(creds))
+	extensionService, err := extension.NewService(ctx, projectID, location, copts...)
 	if err != nil {
-		return nil, fmt.Errorf("failed to initialize Extension service: %w", err)
+		return nil, fmt.Errorf("initialize Extension service: %w", err)
 	}
 	client.extensionService = extensionService
 
 	// Initialize Prompts service
-	promptsService, err := prompt.NewService(ctx, projectID, location, option.WithAuthCredentials(creds))
+	promptsService, err := prompt.NewService(ctx, projectID, location, copts...)
 	if err != nil {
-		return nil, fmt.Errorf("failed to initialize Prompt service: %w", err)
+		return nil, fmt.Errorf("initialize Prompt service: %w", err)
 	}
 	client.promptsService = promptsService
 
 	// Initialize RAG client
-	ragClient, err := rag.NewService(ctx, projectID, location, option.WithAuthCredentials(creds))
+	ragClient, err := rag.NewService(ctx, projectID, location, copts...)
 	if err != nil {
-		return nil, fmt.Errorf("failed to initialize RAG client: %w", err)
+		return nil, fmt.Errorf("initialize RAG client: %w", err)
 	}
 	client.ragClient = ragClient
 
-	// Initialize Evaluation Service
-	evaluationService, err := evaluation.NewService(ctx, projectID, location, option.WithAuthCredentials(creds))
+	// Initialize evaluation service client
+	evaluationClient, err := aiplatform.NewEvaluationClient(ctx, copts...)
 	if err != nil {
-		return nil, fmt.Errorf("failed to initialize Evaluation service: %w", err)
+		return nil, fmt.Errorf("initialize evaluation service client: %w", err)
 	}
-	client.evaluationService = evaluationService
+	client.logger.InfoContext(ctx, "Evaluation client initialized successfully",
+		slog.String("project_id", projectID),
+		slog.String("location", location),
+	)
+	client.evaluationClient = evaluationClient
 
 	// Initialize Reasoning Engine Service
-	reasoningengineService, err := reasoningengine.NewService(ctx, projectID, location, option.WithAuthCredentials(creds))
+	reasoningengineClient, err := aiplatform.NewReasoningEngineClient(ctx, copts...)
 	if err != nil {
-		return nil, fmt.Errorf("failed to initialize Reasoning Engine service: %w", err)
+		return nil, fmt.Errorf("initialize Reasoning Engine service: %w", err)
 	}
-	client.reasoningengineService = reasoningengineService
+	client.logger.InfoContext(ctx, "Reasoning Engine client initialized successfully",
+		slog.String("project_id", projectID),
+		slog.String("location", location),
+	)
+	client.reasoningengineClient = reasoningengineClient
 
-	// Initialize Tuning Service
-	tuningService, err := tuning.NewService(ctx, projectID, location, option.WithAuthCredentials(creds))
+	// Initialize GenAI Tuning Service
+	tuningClient, err := aiplatform.NewGenAiTuningClient(ctx, copts...)
 	if err != nil {
-		return nil, fmt.Errorf("failed to initialize Reasoning Engine service: %w", err)
+		return nil, fmt.Errorf("initialize Reasoning Engine service: %w", err)
 	}
-	client.tuningService = tuningService
+	client.logger.InfoContext(ctx, "GenAI Tuning service initialized successfully",
+		slog.String("project_id", projectID),
+		slog.String("location", location),
+	)
+	client.tuningClient = tuningClient
 
 	client.logger.InfoContext(ctx, "Vertex AI client initialized successfully",
 		slog.String("project_id", projectID),
@@ -175,55 +262,55 @@ func NewClient(ctx context.Context, projectID, location string, opts ...ClientOp
 func (c *Client) Close() error {
 	c.logger.Info("Closing Vertex AI client")
 
-	if err := c.cachingService.Close(); err != nil {
-		c.logger.Error("Failed to close caching service", slog.String("error", err.Error()))
-		return fmt.Errorf("failed to close caching service: %w", err)
+	if err := c.cacheClient.Close(); err != nil {
+		c.logger.Error("close caching service", slog.String("error", err.Error()))
+		return fmt.Errorf("close caching service: %w", err)
 	}
 
-	if err := c.exampleStoreService.Close(); err != nil {
-		c.logger.Error("Failed to close example store service", slog.String("error", err.Error()))
-		return fmt.Errorf("failed to close example store service: %w", err)
+	if err := c.exampleStoreClient.Close(); err != nil {
+		c.logger.Error("close example store service", slog.String("error", err.Error()))
+		return fmt.Errorf("close example store service: %w", err)
 	}
 
 	if err := c.generativeService.Close(); err != nil {
-		c.logger.Error("Failed to close generative models service", slog.String("error", err.Error()))
-		return fmt.Errorf("failed to close generative models service: %w", err)
+		c.logger.Error("close generative models service", slog.String("error", err.Error()))
+		return fmt.Errorf("close generative models service: %w", err)
 	}
 
-	if err := c.modelGardenService.Close(); err != nil {
-		c.logger.Error("Failed to close Model Garden service", slog.String("error", err.Error()))
-		return fmt.Errorf("failed to close Model Garden service: %w", err)
+	if err := c.modelGardenClient.Close(); err != nil {
+		c.logger.Error("close Model Garden service", slog.String("error", err.Error()))
+		return fmt.Errorf("close Model Garden service: %w", err)
 	}
 
 	if err := c.extensionService.Close(); err != nil {
-		c.logger.Error("Failed to close Extension service", slog.String("error", err.Error()))
-		return fmt.Errorf("failed to close Extension service: %w", err)
+		c.logger.Error("close Extension service", slog.String("error", err.Error()))
+		return fmt.Errorf("close Extension service: %w", err)
 	}
 
 	if err := c.promptsService.Close(); err != nil {
-		c.logger.Error("Failed to close Prompts service", slog.String("error", err.Error()))
-		return fmt.Errorf("failed to close Prompts service: %w", err)
+		c.logger.Error("close Prompts service", slog.String("error", err.Error()))
+		return fmt.Errorf("close Prompts service: %w", err)
 	}
 
 	// Close all services
 	if err := c.ragClient.Close(); err != nil {
-		c.logger.Error("Failed to close RAG client", slog.String("error", err.Error()))
-		return fmt.Errorf("failed to close RAG client: %w", err)
+		c.logger.Error("close RAG client", slog.String("error", err.Error()))
+		return fmt.Errorf("close RAG client: %w", err)
 	}
 
-	if err := c.evaluationService.Close(); err != nil {
-		c.logger.Error("Failed to close Evaluation service", slog.String("error", err.Error()))
-		return fmt.Errorf("failed to close Evaluation service: %w", err)
+	if err := c.evaluationClient.Close(); err != nil {
+		c.logger.Error("close Evaluation service", slog.String("error", err.Error()))
+		return fmt.Errorf("close Evaluation service: %w", err)
 	}
 
-	if err := c.reasoningengineService.Close(); err != nil {
-		c.logger.Error("Failed to close Reasoning Engine service", slog.String("error", err.Error()))
-		return fmt.Errorf("failed to close Evaluation service: %w", err)
+	if err := c.reasoningengineClient.Close(); err != nil {
+		c.logger.Error("close Reasoning Engine service", slog.String("error", err.Error()))
+		return fmt.Errorf("close Evaluation service: %w", err)
 	}
 
-	if err := c.tuningService.Close(); err != nil {
-		c.logger.Error("Failed to close Tuning service", slog.String("error", err.Error()))
-		return fmt.Errorf("failed to close Tuning service: %w", err)
+	if err := c.tuningClient.Close(); err != nil {
+		c.logger.Error("close Tuning service", slog.String("error", err.Error()))
+		return fmt.Errorf("close Tuning service: %w", err)
 	}
 
 	c.logger.Info("Vertex AI client closed successfully")
@@ -252,20 +339,20 @@ func (c *Client) GetLogger() *slog.Logger {
 // These methods provide access to individual services while maintaining
 // the unified client context and configuration.
 
-// Caching returns the caching service.
+// Cache returns the caching service.
 //
 // The content caching service provides optimized caching for large content
 // contexts, reducing token usage and improving performance for repeated queries.
-func (c *Client) Caching() caching.Service {
-	return c.cachingService
+func (c *Client) Cache() *aiplatform.GenAiCacheClient {
+	return c.cacheClient
 }
 
 // ExampleStore returns the example store service.
 //
 // The example store service provides functionality for managing Example Stores,
 // uploading examples, and performing similarity-based retrieval for few-shot learning.
-func (c *Client) ExampleStore() examplestore.Service {
-	return c.exampleStoreService
+func (c *Client) ExampleStore() *aiplatform.ExampleStoreClient {
+	return c.exampleStoreClient
 }
 
 // GenerativeModel returns the enhanced generative models service.
@@ -280,8 +367,8 @@ func (c *Client) GenerativeModel() generativemodel.Service {
 //
 // The Model Garden service provides access to experimental and community models,
 // including deployment and management capabilities.
-func (c *Client) ModelGarden() modelgarden.Service {
-	return c.modelGardenService
+func (c *Client) ModelGarden() *aiplatform.ModelGardenClient {
+	return c.modelGardenClient
 }
 
 // Extension returns the Extension service.
@@ -309,18 +396,18 @@ func (c *Client) RAG() *rag.Service {
 }
 
 // Evaluation returns the Evaluation client
-func (c *Client) Evaluation() evaluation.Service {
-	return c.evaluationService
+func (c *Client) Evaluation() *aiplatform.EvaluationClient {
+	return c.evaluationClient
 }
 
 // ReasoningEngine returns the Reasoning Engine client.
-func (c *Client) ReasoningEngine() reasoningengine.Service {
-	return c.reasoningengineService
+func (c *Client) ReasoningEngine() *aiplatform.ReasoningEngineClient {
+	return c.reasoningengineClient
 }
 
 // Tuning returns the Tuning client.
-func (c *Client) Tuning() tuning.Service {
-	return c.tuningService
+func (c *Client) Tuning() *aiplatform.GenAiTuningClient {
+	return c.tuningClient
 }
 
 // Health Check and Status Methods
@@ -335,11 +422,11 @@ func (c *Client) HealthCheck(ctx context.Context) error {
 	// TODO(zchee): In a full implementation, you would perform actual health checks
 	// against each service. For now, we just verify the services are initialized.
 
-	if c.cachingService == nil {
+	if c.cacheClient == nil {
 		return fmt.Errorf("content caching service not initialized")
 	}
 
-	if c.exampleStoreService == nil {
+	if c.exampleStoreClient == nil {
 		return fmt.Errorf("example store service not initialized")
 	}
 
@@ -347,7 +434,7 @@ func (c *Client) HealthCheck(ctx context.Context) error {
 		return fmt.Errorf("generative models service not initialized")
 	}
 
-	if c.modelGardenService == nil {
+	if c.modelGardenClient == nil {
 		return fmt.Errorf("Model Garden service not initialized")
 	}
 
@@ -363,15 +450,15 @@ func (c *Client) HealthCheck(ctx context.Context) error {
 		return fmt.Errorf("RAG client not initialized")
 	}
 
-	if c.evaluationService == nil {
+	if c.evaluationClient == nil {
 		return fmt.Errorf("Evaluation service not initialized")
 	}
 
-	if c.reasoningengineService == nil {
+	if c.reasoningengineClient == nil {
 		return fmt.Errorf("Reasoning Engine service not initialized")
 	}
 
-	if c.tuningService == nil {
+	if c.tuningClient == nil {
 		return fmt.Errorf("Tuning service not initialized")
 	}
 
@@ -383,13 +470,13 @@ func (c *Client) HealthCheck(ctx context.Context) error {
 func (c *Client) GetServiceStatus() map[string]string {
 	status := make(map[string]string)
 
-	if c.cachingService != nil {
-		status["caching"] = "initialized"
+	if c.cacheClient != nil {
+		status["cache"] = "initialized"
 	} else {
-		status["caching"] = "not_initialized"
+		status["cache"] = "not_initialized"
 	}
 
-	if c.exampleStoreService != nil {
+	if c.exampleStoreClient != nil {
 		status["example_store"] = "initialized"
 	} else {
 		status["example_store"] = "not_initialized"
@@ -401,7 +488,7 @@ func (c *Client) GetServiceStatus() map[string]string {
 		status["generative_model"] = "not_initialized"
 	}
 
-	if c.modelGardenService != nil {
+	if c.modelGardenClient != nil {
 		status["model_garden"] = "initialized"
 	} else {
 		status["model_garden"] = "not_initialized"
@@ -425,19 +512,19 @@ func (c *Client) GetServiceStatus() map[string]string {
 		status["rag"] = "not_initialized"
 	}
 
-	if c.evaluationService == nil {
+	if c.evaluationClient != nil {
 		status["evaluation"] = "initialized"
 	} else {
 		status["evaluation"] = "not_initialized"
 	}
 
-	if c.reasoningengineService == nil {
+	if c.reasoningengineClient != nil {
 		status["reasoning_engine"] = "initialized"
 	} else {
 		status["reasoning_engine"] = "not_initialized"
 	}
 
-	if c.tuningService == nil {
+	if c.tuningClient != nil {
 		status["tuning"] = "initialized"
 	} else {
 		status["tuning"] = "not_initialized"

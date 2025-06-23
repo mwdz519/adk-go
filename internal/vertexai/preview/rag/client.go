@@ -11,6 +11,8 @@ import (
 	aiplatform "cloud.google.com/go/aiplatform/apiv1beta1"
 	"google.golang.org/api/option"
 	"google.golang.org/protobuf/types/known/fieldmaskpb"
+
+	"github.com/go-a2a/adk-go/pkg/logging"
 )
 
 // Service provides a unified interface for all Vertex AI RAG operations.
@@ -28,7 +30,7 @@ func NewService(ctx context.Context, projectID, location string, opts ...option.
 	client := &Service{
 		projectID: projectID,
 		location:  location,
-		logger:    slog.Default(),
+		logger:    logging.FromContext(ctx),
 	}
 
 	// Create RAG client

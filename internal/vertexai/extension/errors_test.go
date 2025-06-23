@@ -14,9 +14,9 @@ func TestRegionNotSupportedError(t *testing.T) {
 		SupportedRegions: []string{"us-central1"},
 	}
 
-	expected := "Extensions API is not supported in region 'us-east1'. Supported regions: us-central1"
+	expected := "extension API is not supported in region 'us-east1'. supported regions: us-central1"
 	if err.Error() != expected {
-		t.Errorf("RegionNotSupportedError.Error() = %v, want %v", err.Error(), expected)
+		t.Errorf("RegionNotSupportedError.Error() = %q, want %q", err.Error(), expected)
 	}
 
 	// Test with multiple supported regions
@@ -25,9 +25,9 @@ func TestRegionNotSupportedError(t *testing.T) {
 		SupportedRegions: []string{"us-central1", "europe-west1", "asia-east1"},
 	}
 
-	expected = "Extensions API is not supported in region 'us-east1'. Supported regions: us-central1, europe-west1, asia-east1"
+	expected = "extension API is not supported in region 'us-east1'. supported regions: us-central1, europe-west1, asia-east1"
 	if err.Error() != expected {
-		t.Errorf("RegionNotSupportedError.Error() with multiple regions = %v, want %v", err.Error(), expected)
+		t.Errorf("RegionNotSupportedError.Error() with multiple regions = %q, want %q", err.Error(), expected)
 	}
 }
 
