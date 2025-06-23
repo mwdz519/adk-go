@@ -4,14 +4,13 @@
 package prompt
 
 import (
-	"context"
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
 )
 
 func TestService_ApplyTemplate(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	service, err := NewService(ctx, "test-project", "us-central1")
 	if err != nil {
 		t.Fatalf("NewService() unexpected error: %v", err)
@@ -112,7 +111,7 @@ func TestService_ApplyTemplate(t *testing.T) {
 }
 
 func TestService_ApplyTemplateToPrompt(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	service, err := NewService(ctx, "test-project", "us-central1")
 	if err != nil {
 		t.Fatalf("NewService() unexpected error: %v", err)
@@ -143,7 +142,7 @@ func TestService_ApplyTemplateToPrompt(t *testing.T) {
 }
 
 func TestService_ApplyTemplateSimple(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	service, err := NewService(ctx, "test-project", "us-central1")
 	if err != nil {
 		t.Fatalf("NewService() unexpected error: %v", err)
@@ -180,7 +179,7 @@ func TestService_ApplyTemplateSimple(t *testing.T) {
 }
 
 func TestService_ValidateTemplate(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	service, err := NewService(ctx, "test-project", "us-central1")
 	if err != nil {
 		t.Fatalf("NewService() unexpected error: %v", err)
@@ -229,7 +228,7 @@ func TestService_ValidateTemplate(t *testing.T) {
 }
 
 func TestService_PreviewTemplate(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	service, err := NewService(ctx, "test-project", "us-central1")
 	if err != nil {
 		t.Fatalf("NewService() unexpected error: %v", err)
@@ -255,7 +254,7 @@ func TestService_PreviewTemplate(t *testing.T) {
 }
 
 func TestService_ExtractVariables(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	service, err := NewService(ctx, "test-project", "us-central1")
 	if err != nil {
 		t.Fatalf("NewService() unexpected error: %v", err)
@@ -277,7 +276,7 @@ func TestService_ExtractVariables(t *testing.T) {
 }
 
 func TestService_BatchApplyTemplates(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	service, err := NewService(ctx, "test-project", "us-central1")
 	if err != nil {
 		t.Fatalf("NewService() unexpected error: %v", err)
@@ -337,7 +336,7 @@ func TestService_BatchApplyTemplates(t *testing.T) {
 }
 
 func TestService_CompileTemplate(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	service, err := NewService(ctx, "test-project", "us-central1")
 	if err != nil {
 		t.Fatalf("NewService() unexpected error: %v", err)
@@ -376,7 +375,7 @@ func TestService_CompileTemplate(t *testing.T) {
 }
 
 func TestService_GenerateTemplatePreview(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	service, err := NewService(ctx, "test-project", "us-central1")
 	if err != nil {
 		t.Fatalf("NewService() unexpected error: %v", err)
@@ -416,7 +415,7 @@ func TestService_GenerateTemplatePreview(t *testing.T) {
 }
 
 func TestTemplateAnalyzer(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	service, err := NewService(ctx, "test-project", "us-central1")
 	if err != nil {
 		t.Fatalf("NewService() unexpected error: %v", err)
@@ -463,7 +462,7 @@ func TestTemplateAnalyzer(t *testing.T) {
 }
 
 func TestApplyTemplateWithValidation(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	service, err := NewService(ctx, "test-project", "us-central1")
 	if err != nil {
 		t.Fatalf("NewService() unexpected error: %v", err)
@@ -550,7 +549,7 @@ func TestApplyTemplateWithValidation(t *testing.T) {
 }
 
 func TestApplyTemplateMetrics(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	service, err := NewService(ctx, "test-project", "us-central1")
 	if err != nil {
 		t.Fatalf("NewService() unexpected error: %v", err)

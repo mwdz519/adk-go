@@ -5,6 +5,7 @@ package examplestore
 
 import (
 	"fmt"
+	"slices"
 	"time"
 )
 
@@ -113,10 +114,10 @@ type StoredExample struct {
 	Metadata map[string]any `json:"metadata,omitempty"`
 
 	// CreateTime is the timestamp when the example was created.
-	CreateTime *time.Time `json:"create_time,omitempty"`
+	CreateTime time.Time `json:"create_time,omitzero"`
 
 	// UpdateTime is the timestamp when the example was last updated.
-	UpdateTime *time.Time `json:"update_time,omitempty"`
+	UpdateTime time.Time `json:"update_time,omitzero"`
 
 	// State is the current state of the example.
 	State ExampleState `json:"state,omitempty"`
@@ -353,13 +354,7 @@ func (c *StoreConfig) Validate() error {
 	}
 
 	// Validate embedding model
-	validModel := false
-	for _, model := range EmbeddingModels {
-		if c.EmbeddingModel == model {
-			validModel = true
-			break
-		}
-	}
+	validModel := slices.Contains(EmbeddingModels, c.EmbeddingModel)
 	if !validModel {
 		return fmt.Errorf("unsupported embedding model: %s", c.EmbeddingModel)
 	}

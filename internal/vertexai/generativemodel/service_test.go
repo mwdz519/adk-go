@@ -4,23 +4,23 @@
 package generativemodel
 
 import (
-	"context"
 	"log/slog"
 	"testing"
 	"time"
 
 	"github.com/google/go-cmp/cmp"
+	"google.golang.org/api/option"
 	"google.golang.org/genai"
 )
 
 func TestNewService(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 
 	tests := []struct {
 		name      string
 		projectID string
 		location  string
-		opts      []ServiceOption
+		opts      []option.ClientOption
 		wantErr   bool
 	}{
 		{
@@ -34,7 +34,7 @@ func TestNewService(t *testing.T) {
 			name:      "with custom logger",
 			projectID: "test-project",
 			location:  "us-central1",
-			opts:      []ServiceOption{WithLogger(slog.Default())},
+			opts:      []option.ClientOption{option.WithLogger(slog.Default())},
 			wantErr:   false,
 		},
 		{
@@ -87,7 +87,7 @@ func TestNewService(t *testing.T) {
 }
 
 func TestService_GenerateContentWithPreview(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 
 	service, err := NewService(ctx, "test-project", "us-central1")
 	if err != nil {
@@ -220,7 +220,7 @@ func TestService_GenerateContentWithPreview(t *testing.T) {
 }
 
 func TestService_GenerateContentStreamWithPreview(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 
 	service, err := NewService(ctx, "test-project", "us-central1")
 	if err != nil {
@@ -287,7 +287,7 @@ func TestService_GenerateContentStreamWithPreview(t *testing.T) {
 }
 
 func TestService_GenerateContentWithTools(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 
 	service, err := NewService(ctx, "test-project", "us-central1")
 	if err != nil {
@@ -427,7 +427,7 @@ func TestService_GenerateContentWithTools(t *testing.T) {
 }
 
 func TestService_CountTokensPreview(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 
 	service, err := NewService(ctx, "test-project", "us-central1")
 	if err != nil {
@@ -539,7 +539,7 @@ func TestService_CountTokensPreview(t *testing.T) {
 }
 
 func TestService_GetSupportedModels(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 
 	service, err := NewService(ctx, "test-project", "us-central1")
 	if err != nil {
@@ -566,7 +566,7 @@ func TestService_GetSupportedModels(t *testing.T) {
 }
 
 func TestService_IsModelSupported(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 
 	service, err := NewService(ctx, "test-project", "us-central1")
 	if err != nil {
@@ -607,7 +607,7 @@ func TestService_IsModelSupported(t *testing.T) {
 
 // Benchmark tests
 func BenchmarkService_GenerateContentWithPreview(b *testing.B) {
-	ctx := context.Background()
+	ctx := b.Context()
 
 	service, err := NewService(ctx, "test-project", "us-central1")
 	if err != nil {
@@ -625,48 +625,10 @@ func BenchmarkService_GenerateContentWithPreview(b *testing.B) {
 	}
 
 	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		_, err := service.GenerateContentWithPreview(ctx, "gemini-2.0-flash-001", request)
 		if err != nil {
 			b.Fatalf("GenerateContentWithPreview() error = %v", err)
 		}
 	}
-}
-
-// Example tests
-func ExampleService_GenerateContentWithPreview() {
-	ctx := context.Background()
-
-	service, err := NewService(ctx, "my-project", "us-central1")
-	if err != nil {
-		panic(err)
-	}
-	defer service.Close()
-
-	// Create a preview request with enhanced features
-	request := &PreviewGenerateRequest{
-		Contents: []*genai.Content{
-			{
-				Parts: []*genai.Part{{Text: "Explain quantum computing"}},
-				Role:  "user",
-			},
-		},
-		UseContentCache: true,
-		CacheID:         "projects/my-project/locations/us-central1/cachedContents/my-cache",
-		EnhancedSafety: &SafetyConfig{
-			StrictMode: true,
-		},
-		ExperimentalOpts: map[string]any{
-			"temperature": 0.7,
-		},
-	}
-
-	// Generate content with preview features
-	response, err := service.GenerateContentWithPreview(ctx, "gemini-2.0-flash-001", request)
-	if err != nil {
-		panic(err)
-	}
-
-	// Use the response
-	_ = response
 }

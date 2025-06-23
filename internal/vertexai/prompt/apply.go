@@ -12,7 +12,7 @@ import (
 // Template application methods for the prompts service
 
 // ApplyTemplate applies variables to a prompt template and returns the resulting content.
-func (s *Service) ApplyTemplate(ctx context.Context, req *ApplyTemplateRequest) (*ApplyTemplateResponse, error) {
+func (s *service) ApplyTemplate(ctx context.Context, req *ApplyTemplateRequest) (*ApplyTemplateResponse, error) {
 	tracker := s.metrics.StartOperation("apply_template")
 	defer tracker.Finish()
 
@@ -69,7 +69,7 @@ func (s *Service) ApplyTemplate(ctx context.Context, req *ApplyTemplateRequest) 
 }
 
 // ApplyTemplateToPrompt is a convenience method that applies variables to a prompt object.
-func (s *Service) ApplyTemplateToPrompt(ctx context.Context, prompt *Prompt, variables map[string]any) (*ApplyTemplateResponse, error) {
+func (s *service) ApplyTemplateToPrompt(ctx context.Context, prompt *Prompt, variables map[string]any) (*ApplyTemplateResponse, error) {
 	return s.ApplyTemplate(ctx, &ApplyTemplateRequest{
 		Template:          prompt.Template,
 		Variables:         variables,
@@ -79,7 +79,7 @@ func (s *Service) ApplyTemplateToPrompt(ctx context.Context, prompt *Prompt, var
 }
 
 // ApplyTemplateSimple is a simplified method for quick template application.
-func (s *Service) ApplyTemplateSimple(ctx context.Context, promptID string, variables map[string]any) (string, error) {
+func (s *service) ApplyTemplateSimple(ctx context.Context, promptID string, variables map[string]any) (string, error) {
 	response, err := s.ApplyTemplate(ctx, &ApplyTemplateRequest{
 		PromptID:          promptID,
 		Variables:         variables,
@@ -92,12 +92,12 @@ func (s *Service) ApplyTemplateSimple(ctx context.Context, promptID string, vari
 }
 
 // ValidateTemplate validates a template without applying variables.
-func (s *Service) ValidateTemplate(ctx context.Context, template string, variables []string) (*TemplateValidationResult, error) {
+func (s *service) ValidateTemplate(ctx context.Context, template string, variables []string) (*TemplateValidationResult, error) {
 	return s.templateEngine.ValidateTemplateDetailed(template, variables), nil
 }
 
 // PreviewTemplate previews how a template would look with sample variables.
-func (s *Service) PreviewTemplate(ctx context.Context, template string, sampleVariables map[string]any) (*ApplyTemplateResponse, error) {
+func (s *service) PreviewTemplate(ctx context.Context, template string, sampleVariables map[string]any) (*ApplyTemplateResponse, error) {
 	// Create a copy of the template processor in loose mode for preview
 	previewProcessor := NewTemplateProcessorWithOptions(s.templateEngine.engine, ValidationModeLoose)
 
@@ -110,7 +110,7 @@ func (s *Service) PreviewTemplate(ctx context.Context, template string, sampleVa
 }
 
 // ExtractVariables extracts all variables from a template.
-func (s *Service) ExtractVariables(ctx context.Context, template string) ([]string, error) {
+func (s *service) ExtractVariables(ctx context.Context, template string) ([]string, error) {
 	variables := s.templateEngine.ExtractVariables(template)
 
 	s.logger.InfoContext(ctx, "Variables extracted from template",
@@ -124,7 +124,7 @@ func (s *Service) ExtractVariables(ctx context.Context, template string) ([]stri
 // Batch template operations
 
 // BatchApplyTemplates applies variables to multiple templates in a single operation.
-func (s *Service) BatchApplyTemplates(ctx context.Context, requests []*ApplyTemplateRequest) ([]*BatchTemplateResult, error) {
+func (s *service) BatchApplyTemplates(ctx context.Context, requests []*ApplyTemplateRequest) ([]*BatchTemplateResult, error) {
 	if len(requests) == 0 {
 		return nil, NewInvalidRequestError("requests", "cannot be empty")
 	}
@@ -152,7 +152,7 @@ func (s *Service) BatchApplyTemplates(ctx context.Context, requests []*ApplyTemp
 }
 
 // CompileTemplate compiles a template for efficient repeated use.
-func (s *Service) CompileTemplate(ctx context.Context, template string) (*CompiledTemplate, error) {
+func (s *service) CompileTemplate(ctx context.Context, template string) (*CompiledTemplate, error) {
 	compiler := NewTemplateCompiler(s.templateEngine)
 
 	compiled, err := compiler.Compile(template)
@@ -171,7 +171,7 @@ func (s *Service) CompileTemplate(ctx context.Context, template string) (*Compil
 // Helper methods
 
 // validateApplyTemplateRequest validates an apply template request.
-func (s *Service) validateApplyTemplateRequest(req *ApplyTemplateRequest) error {
+func (s *service) validateApplyTemplateRequest(req *ApplyTemplateRequest) error {
 	if req == nil {
 		return NewInvalidRequestError("request", "cannot be nil")
 	}
@@ -189,7 +189,7 @@ func (s *Service) validateApplyTemplateRequest(req *ApplyTemplateRequest) error 
 }
 
 // getPromptForTemplate retrieves a prompt for template application.
-func (s *Service) getPromptForTemplate(ctx context.Context, req *ApplyTemplateRequest) (*Prompt, error) {
+func (s *service) getPromptForTemplate(ctx context.Context, req *ApplyTemplateRequest) (*Prompt, error) {
 	getReq := &GetPromptRequest{}
 
 	if req.PromptID != "" {
@@ -211,7 +211,7 @@ func (s *Service) getPromptForTemplate(ctx context.Context, req *ApplyTemplateRe
 }
 
 // validateTemplateVariables validates template variables.
-func (s *Service) validateTemplateVariables(template string, declaredVars []string, providedVars map[string]any, strictMode bool) error {
+func (s *service) validateTemplateVariables(template string, declaredVars []string, providedVars map[string]any, strictMode bool) error {
 	// Extract variables from template
 	templateVars := s.templateEngine.ExtractVariables(template)
 
@@ -274,7 +274,7 @@ type TemplatePreview struct {
 }
 
 // GenerateTemplatePreview generates a comprehensive template preview.
-func (s *Service) GenerateTemplatePreview(ctx context.Context, template string, sampleVariables map[string]any) (*TemplatePreview, error) {
+func (s *service) GenerateTemplatePreview(ctx context.Context, template string, sampleVariables map[string]any) (*TemplatePreview, error) {
 	// Extract variables
 	detectedVars := s.templateEngine.ExtractVariables(template)
 
@@ -300,11 +300,11 @@ func (s *Service) GenerateTemplatePreview(ctx context.Context, template string, 
 
 // TemplateAnalyzer provides analysis of template usage patterns.
 type TemplateAnalyzer struct {
-	service *Service
+	service *service
 }
 
 // NewTemplateAnalyzer creates a new template analyzer.
-func (s *Service) NewTemplateAnalyzer() *TemplateAnalyzer {
+func (s *service) NewTemplateAnalyzer() *TemplateAnalyzer {
 	return &TemplateAnalyzer{
 		service: s,
 	}

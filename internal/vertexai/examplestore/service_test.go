@@ -4,7 +4,6 @@
 package examplestore
 
 import (
-	"context"
 	"fmt"
 	"testing"
 )
@@ -44,7 +43,7 @@ func TestNewService(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			ctx := context.Background()
+			ctx := t.Context()
 
 			// Note: This test will fail if credentials are not available
 			// In a real test environment, you might want to mock the client
@@ -81,7 +80,7 @@ func TestNewService(t *testing.T) {
 }
 
 func TestService_GenerateStoreName(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	service, err := NewService(ctx, "test-project", SupportedRegion)
 	if err != nil {
 		t.Skipf("Skipping test due to credential error: %v", err)
@@ -116,7 +115,7 @@ func TestService_GenerateStoreName(t *testing.T) {
 }
 
 func TestService_GenerateExampleName(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	service, err := NewService(ctx, "test-project", SupportedRegion)
 	if err != nil {
 		t.Skipf("Skipping test due to credential error: %v", err)
@@ -148,7 +147,7 @@ func TestService_GenerateExampleName(t *testing.T) {
 }
 
 func TestService_HealthCheck(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	service, err := NewService(ctx, "test-project", SupportedRegion)
 	if err != nil {
 		t.Skipf("Skipping test due to credential error: %v", err)
@@ -161,7 +160,7 @@ func TestService_HealthCheck(t *testing.T) {
 }
 
 func TestService_GetServiceStatus(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	service, err := NewService(ctx, "test-project", SupportedRegion)
 	if err != nil {
 		t.Skipf("Skipping test due to credential error: %v", err)
@@ -185,7 +184,7 @@ func TestService_GetServiceStatus(t *testing.T) {
 }
 
 func TestService_CreateDefaultStore(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	service, err := NewService(ctx, "test-project", SupportedRegion)
 	if err != nil {
 		t.Skipf("Skipping test due to credential error: %v", err)
@@ -219,7 +218,7 @@ func TestService_CreateDefaultStore(t *testing.T) {
 }
 
 func TestService_BatchUploadExamples(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	service, err := NewService(ctx, "test-project", SupportedRegion)
 	if err != nil {
 		t.Skipf("Skipping test due to credential error: %v", err)
@@ -230,7 +229,7 @@ func TestService_BatchUploadExamples(t *testing.T) {
 
 	// Create 12 examples to test batching (should be split into 3 batches of 5, 5, 2)
 	examples := make([]*Example, 12)
-	for i := 0; i < 12; i++ {
+	for i := range 12 {
 		examples[i] = &Example{
 			Input: &Content{
 				Text: fmt.Sprintf("Input text %d", i),
@@ -261,7 +260,7 @@ func TestService_BatchUploadExamples(t *testing.T) {
 }
 
 func TestService_QuickSearch(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	service, err := NewService(ctx, "test-project", SupportedRegion)
 	if err != nil {
 		t.Skipf("Skipping test due to credential error: %v", err)

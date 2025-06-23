@@ -4,13 +4,12 @@
 package vertexai
 
 import (
-	"context"
 	"log/slog"
 	"testing"
 )
 
 func TestNewClient(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 
 	tests := []struct {
 		name      string
@@ -100,7 +99,7 @@ func TestNewClient(t *testing.T) {
 }
 
 func TestClient_HealthCheck(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 
 	client, err := NewClient(ctx, "test-project", "us-central1")
 	if err != nil {
@@ -114,7 +113,7 @@ func TestClient_HealthCheck(t *testing.T) {
 }
 
 func TestClient_GetServiceStatus(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 
 	client, err := NewClient(ctx, "test-project", "us-central1")
 	if err != nil {
@@ -137,7 +136,7 @@ func TestClient_GetServiceStatus(t *testing.T) {
 }
 
 func TestClientOption_WithLogger(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	customLogger := slog.Default()
 
 	client, err := NewClient(ctx, "test-project", "us-central1", WithLogger(customLogger))
@@ -152,7 +151,7 @@ func TestClientOption_WithLogger(t *testing.T) {
 }
 
 func TestClient_ServiceAccess(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 
 	client, err := NewClient(ctx, "test-project", "us-central1")
 	if err != nil {
@@ -227,8 +226,7 @@ func TestClient_ServiceAccess(t *testing.T) {
 }
 
 func TestClient_Close(t *testing.T) {
-	t.Skip()
-	ctx := context.Background()
+	ctx := t.Context()
 
 	client, err := NewClient(ctx, "test-project", "us-central1")
 	if err != nil {
@@ -248,7 +246,7 @@ func TestClient_Close(t *testing.T) {
 
 // Benchmark tests for client operations
 func BenchmarkNewClient(b *testing.B) {
-	ctx := context.Background()
+	ctx := b.Context()
 
 	b.ResetTimer()
 	for b.Loop() {
@@ -261,7 +259,7 @@ func BenchmarkNewClient(b *testing.B) {
 }
 
 func BenchmarkClient_HealthCheck(b *testing.B) {
-	ctx := context.Background()
+	ctx := b.Context()
 
 	client, err := NewClient(ctx, "test-project", "us-central1")
 	if err != nil {
@@ -274,54 +272,5 @@ func BenchmarkClient_HealthCheck(b *testing.B) {
 		if err := client.HealthCheck(ctx); err != nil {
 			b.Fatalf("HealthCheck() error = %v", err)
 		}
-	}
-}
-
-// Example tests demonstrating usage patterns
-func ExampleNewClient() {
-	ctx := context.Background()
-
-	// Create a new preview client
-	client, err := NewClient(ctx, "my-project", "us-central1")
-	if err != nil {
-		panic(err)
-	}
-	defer client.Close()
-
-	// Access individual services
-	ragService := client.RAG()
-	contentCacheService := client.Caching()
-	generativeService := client.GenerativeModel()
-	modelGardenService := client.ModelGarden()
-
-	// Use the services for various operations
-	_ = ragService
-	_ = contentCacheService
-	_ = generativeService
-	_ = modelGardenService
-
-	// Perform health check
-	if err := client.HealthCheck(ctx); err != nil {
-		panic(err)
-	}
-}
-
-func ExampleClient_GetServiceStatus() {
-	ctx := context.Background()
-
-	client, err := NewClient(ctx, "my-project", "us-central1")
-	if err != nil {
-		panic(err)
-	}
-	defer client.Close()
-
-	// Get service status
-	status := client.GetServiceStatus()
-	for service, state := range status {
-		if state == "initialized" {
-			continue // Service is ready
-		}
-		// Handle service not ready
-		_ = service
 	}
 }

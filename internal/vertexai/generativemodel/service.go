@@ -8,10 +8,10 @@ import (
 	"fmt"
 	"iter"
 	"log/slog"
+	"slices"
 	"time"
 
 	aiplatform "cloud.google.com/go/aiplatform/apiv1beta1"
-	"cloud.google.com/go/auth/credentials"
 	"google.golang.org/api/option"
 	"google.golang.org/genai"
 )
@@ -21,22 +21,37 @@ import (
 // The service extends standard generative model functionality with preview features
 // including content caching integration, enhanced safety options, advanced tool calling,
 // and experimental model parameters.
-type Service struct {
+type Service interface {
+	// GetProjectID returns the configured project ID.
+	GetProjectID() string
+
+	// GetLocation returns the configured location.
+	GetLocation() string
+
+	// GenerateContentWithPreview generates content with preview features.
+	GenerateContentWithPreview(ctx context.Context, modelName string, req *PreviewGenerateRequest) (*PreviewGenerateResponse, error)
+
+	// GenerateContentStreamWithPreview generates content with streaming and preview features.
+	GenerateContentStreamWithPreview(ctx context.Context, modelName string, req *PreviewGenerateRequest) iter.Seq2[*PreviewGenerateResponse, error]
+
+	// GenerateContentWithTools generates content with enhanced tool calling.
+	GenerateContentWithTools(ctx context.Context, modelName string, req *ToolGenerateRequest) (*ToolGenerateResponse, error)
+
+	// CountTokensPreview counts tokens with preview features.
+	CountTokensPreview(ctx context.Context, req *TokenCountRequest) (*TokenCountResponse, error)
+
+	// Close closes the service and releases resources.
+	Close() error
+}
+
+type service struct {
 	client    *aiplatform.PredictionClient
 	projectID string
 	location  string
 	logger    *slog.Logger
 }
 
-// ServiceOption is a functional option for configuring the generative models service.
-type ServiceOption func(*Service)
-
-// WithLogger sets a custom logger for the service.
-func WithLogger(logger *slog.Logger) ServiceOption {
-	return func(s *Service) {
-		s.logger = logger
-	}
-}
+var _ Service = (*service)(nil)
 
 // NewService creates a new enhanced generative models service.
 //
@@ -50,7 +65,7 @@ func WithLogger(logger *slog.Logger) ServiceOption {
 //   - opts: Optional configuration options
 //
 // Returns a configured service instance or an error if initialization fails.
-func NewService(ctx context.Context, projectID, location string, opts ...ServiceOption) (*Service, error) {
+func NewService(ctx context.Context, projectID, location string, opts ...option.ClientOption) (*service, error) {
 	if projectID == "" {
 		return nil, fmt.Errorf("projectID is required")
 	}
@@ -58,29 +73,14 @@ func NewService(ctx context.Context, projectID, location string, opts ...Service
 		return nil, fmt.Errorf("location is required")
 	}
 
-	service := &Service{
+	service := &service{
 		projectID: projectID,
 		location:  location,
 		logger:    slog.Default(),
 	}
 
-	// Apply options
-	for _, opt := range opts {
-		opt(service)
-	}
-
-	// Create credentials
-	creds, err := credentials.DetectDefault(&credentials.DetectOptions{
-		Scopes: []string{
-			"https://www.googleapis.com/auth/cloud-platform",
-		},
-	})
-	if err != nil {
-		return nil, fmt.Errorf("failed to detect default credentials: %w", err)
-	}
-
 	// Create prediction service client for enhanced generative models
-	client, err := aiplatform.NewPredictionClient(ctx, option.WithAuthCredentials(creds))
+	client, err := aiplatform.NewPredictionClient(ctx, opts...)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create prediction service client: %w", err)
 	}
@@ -95,7 +95,7 @@ func NewService(ctx context.Context, projectID, location string, opts ...Service
 }
 
 // Close closes the enhanced generative models service and releases resources.
-func (s *Service) Close() error {
+func (s *service) Close() error {
 	if s.client != nil {
 		if err := s.client.Close(); err != nil {
 			return fmt.Errorf("failed to close prediction service client: %w", err)
@@ -118,7 +118,7 @@ func (s *Service) Close() error {
 //   - req: Preview generation request with enhanced options
 //
 // Returns a preview response with additional metadata or an error.
-func (s *Service) GenerateContentWithPreview(ctx context.Context, modelName string, req *PreviewGenerateRequest) (*PreviewGenerateResponse, error) {
+func (s *service) GenerateContentWithPreview(ctx context.Context, modelName string, req *PreviewGenerateRequest) (*PreviewGenerateResponse, error) {
 	if req == nil {
 		return nil, fmt.Errorf("request cannot be nil")
 	}
@@ -201,7 +201,7 @@ func (s *Service) GenerateContentWithPreview(ctx context.Context, modelName stri
 //   - req: Preview generation request with enhanced options
 //
 // Returns an iterator of preview responses with streaming data.
-func (s *Service) GenerateContentStreamWithPreview(ctx context.Context, modelName string, req *PreviewGenerateRequest) iter.Seq2[*PreviewGenerateResponse, error] {
+func (s *service) GenerateContentStreamWithPreview(ctx context.Context, modelName string, req *PreviewGenerateRequest) iter.Seq2[*PreviewGenerateResponse, error] {
 	return func(yield func(*PreviewGenerateResponse, error) bool) {
 		s.logger.InfoContext(ctx, "Starting streaming generation with preview features",
 			slog.String("model", modelName),
@@ -299,7 +299,7 @@ func (s *Service) GenerateContentStreamWithPreview(ctx context.Context, modelNam
 //   - req: Tool generation request with enhanced tool configuration
 //
 // Returns a tool response with detailed tool call metadata.
-func (s *Service) GenerateContentWithTools(ctx context.Context, modelName string, req *ToolGenerateRequest) (*ToolGenerateResponse, error) {
+func (s *service) GenerateContentWithTools(ctx context.Context, modelName string, req *ToolGenerateRequest) (*ToolGenerateResponse, error) {
 	if req == nil {
 		return nil, fmt.Errorf("request cannot be nil")
 	}
@@ -384,7 +384,7 @@ func (s *Service) GenerateContentWithTools(ctx context.Context, modelName string
 //   - req: Token count request with preview options
 //
 // Returns detailed token count information including cache optimization.
-func (s *Service) CountTokensPreview(ctx context.Context, req *TokenCountRequest) (*TokenCountResponse, error) {
+func (s *service) CountTokensPreview(ctx context.Context, req *TokenCountRequest) (*TokenCountResponse, error) {
 	if req == nil {
 		return nil, fmt.Errorf("request cannot be nil")
 	}
@@ -436,7 +436,7 @@ func (s *Service) CountTokensPreview(ctx context.Context, req *TokenCountRequest
 // Helper Methods
 
 // enhanceRequest applies preview-specific enhancements to a request.
-func (s *Service) enhanceRequest(req *PreviewGenerateRequest) *PreviewGenerateRequest {
+func (s *service) enhanceRequest(req *PreviewGenerateRequest) *PreviewGenerateRequest {
 	enhanced := &PreviewGenerateRequest{}
 	*enhanced = *req
 
@@ -465,22 +465,22 @@ func (s *Service) enhanceRequest(req *PreviewGenerateRequest) *PreviewGenerateRe
 }
 
 // GetProjectID returns the configured project ID.
-func (s *Service) GetProjectID() string {
+func (s *service) GetProjectID() string {
 	return s.projectID
 }
 
 // GetLocation returns the configured location.
-func (s *Service) GetLocation() string {
+func (s *service) GetLocation() string {
 	return s.location
 }
 
 // GetLogger returns the configured logger.
-func (s *Service) GetLogger() *slog.Logger {
+func (s *service) GetLogger() *slog.Logger {
 	return s.logger
 }
 
 // GetSupportedModels returns a list of models that support preview features.
-func (s *Service) GetSupportedModels() []string {
+func (s *service) GetSupportedModels() []string {
 	return []string{
 		"gemini-2.0-flash-001",
 		"gemini-2.0-pro-001",
@@ -490,12 +490,7 @@ func (s *Service) GetSupportedModels() []string {
 }
 
 // IsModelSupported checks if a model supports preview features.
-func (s *Service) IsModelSupported(modelName string) bool {
+func (s *service) IsModelSupported(modelName string) bool {
 	supported := s.GetSupportedModels()
-	for _, model := range supported {
-		if model == modelName {
-			return true
-		}
-	}
-	return false
+	return slices.Contains(supported, modelName)
 }

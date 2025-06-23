@@ -14,65 +14,55 @@ import (
 
 	aiplatform "cloud.google.com/go/aiplatform/apiv1beta1"
 	"cloud.google.com/go/aiplatform/apiv1beta1/aiplatformpb"
-	"cloud.google.com/go/auth/credentials"
 	"google.golang.org/api/option"
 )
 
-type vertexExtensionHubType struct {
-	displayName string
-	description string
-	manifest    *aiplatformpb.ExtensionManifest
-}
-
-var VertexExtensionHub = map[string]vertexExtensionHubType{
-	"code_interpreter": {
-		displayName: "Code Interpreter",
-		description: "This extension generates and executes code in the specified language",
-		manifest: &aiplatformpb.ExtensionManifest{
-			Name:        "code_interpreter_tool",
-			Description: "Google Code Interpreter Extension",
-			ApiSpec: &aiplatformpb.ExtensionManifest_ApiSpec{
-				ApiSpec: &aiplatformpb.ExtensionManifest_ApiSpec_OpenApiGcsUri{
-					OpenApiGcsUri: "gs://vertex-extension-public/code_interpreter.yaml",
+var VertexExtensionHub = map[PrebuiltExtensionType]*aiplatformpb.ImportExtensionRequest{
+	PrebuiltExtensionCodeInterpreter: {
+		Extension: &aiplatformpb.Extension{
+			DisplayName: "Code Interpreter",
+			Description: "This extension generates and executes code in the specified language",
+			Manifest: &aiplatformpb.ExtensionManifest{
+				Name:        "code_interpreter_tool",
+				Description: "Google Code Interpreter Extension",
+				ApiSpec: &aiplatformpb.ExtensionManifest_ApiSpec{
+					ApiSpec: &aiplatformpb.ExtensionManifest_ApiSpec_OpenApiGcsUri{
+						OpenApiGcsUri: "gs://vertex-extension-public/code_interpreter.yaml",
+					},
 				},
-			},
-			AuthConfig: &aiplatformpb.AuthConfig{
-				AuthType:   aiplatformpb.AuthType_GOOGLE_SERVICE_ACCOUNT_AUTH,
-				AuthConfig: &aiplatformpb.AuthConfig_GoogleServiceAccountConfig_{},
+				AuthConfig: NewGoogleServiceAccountConfig(""),
 			},
 		},
 	},
-	"vertex_ai_search": {
-		displayName: "Vertex AI Search",
-		description: "This extension generates and executes search queries",
-		manifest: &aiplatformpb.ExtensionManifest{
-			Name:        "vertex_ai_search",
-			Description: "Vertex AI Search Extension",
-			ApiSpec: &aiplatformpb.ExtensionManifest_ApiSpec{
-				ApiSpec: &aiplatformpb.ExtensionManifest_ApiSpec_OpenApiGcsUri{
-					OpenApiGcsUri: "gs://vertex-extension-public/vertex_ai_search.yaml",
+	PrebuiltExtensionVertexAISearch: {
+		Extension: &aiplatformpb.Extension{
+			DisplayName: "Vertex AI Search",
+			Description: "This extension generates and executes search queries",
+			Manifest: &aiplatformpb.ExtensionManifest{
+				Name:        "vertex_ai_search",
+				Description: "Vertex AI Search Extension",
+				ApiSpec: &aiplatformpb.ExtensionManifest_ApiSpec{
+					ApiSpec: &aiplatformpb.ExtensionManifest_ApiSpec_OpenApiGcsUri{
+						OpenApiGcsUri: "gs://vertex-extension-public/vertex_ai_search.yaml",
+					},
 				},
-			},
-			AuthConfig: &aiplatformpb.AuthConfig{
-				AuthType:   aiplatformpb.AuthType_GOOGLE_SERVICE_ACCOUNT_AUTH,
-				AuthConfig: &aiplatformpb.AuthConfig_GoogleServiceAccountConfig_{},
+				AuthConfig: NewGoogleServiceAccountConfig(""),
 			},
 		},
 	},
-	"webpage_browser": {
-		displayName: "Webpage Browser",
-		description: "This extension fetches the content of a webpage",
-		manifest: &aiplatformpb.ExtensionManifest{
-			Name:        "webpage_browser",
-			Description: "Vertex Webpage Browser Extension",
-			ApiSpec: &aiplatformpb.ExtensionManifest_ApiSpec{
-				ApiSpec: &aiplatformpb.ExtensionManifest_ApiSpec_OpenApiGcsUri{
-					OpenApiGcsUri: "gs://vertex-extension-public/webpage_browser.yaml",
+	PrebuiltExtensionWebpageBrowser: {
+		Extension: &aiplatformpb.Extension{
+			DisplayName: "Webpage Browser",
+			Description: "This extension fetches the content of a webpage",
+			Manifest: &aiplatformpb.ExtensionManifest{
+				Name:        "webpage_browser",
+				Description: "Vertex Webpage Browser Extension",
+				ApiSpec: &aiplatformpb.ExtensionManifest_ApiSpec{
+					ApiSpec: &aiplatformpb.ExtensionManifest_ApiSpec_OpenApiGcsUri{
+						OpenApiGcsUri: "gs://vertex-extension-public/webpage_browser.yaml",
+					},
 				},
-			},
-			AuthConfig: &aiplatformpb.AuthConfig{
-				AuthType:   aiplatformpb.AuthType_GOOGLE_SERVICE_ACCOUNT_AUTH,
-				AuthConfig: &aiplatformpb.AuthConfig_GoogleServiceAccountConfig_{},
+				AuthConfig: NewGoogleServiceAccountConfig(""),
 			},
 		},
 	},
@@ -82,7 +72,57 @@ var VertexExtensionHub = map[string]vertexExtensionHubType{
 //
 // The service manages extension lifecycles, executes operations, and provides
 // access to prebuilt extensions from Google's extension hub.
-type Service struct {
+type Service interface {
+	// GetProjectID returns the configured Google Cloud project ID.
+	GetProjectID() string
+
+	// GetLocation returns the configured geographic location.
+	GetLocation() string
+
+	// GetParent returns the resource name of the Location to import the Extension in.
+	GetParent() string
+
+	// CreateExtension creates a new custom extension.
+	CreateExtension(ctx context.Context, req *aiplatformpb.ImportExtensionRequest) (*Extension, error)
+
+	// ExecuteExtension executes an operation on a specific extension.
+	ExecuteExtension(ctx context.Context, req *aiplatformpb.ExecuteExtensionRequest) (*aiplatformpb.ExecuteExtensionResponse, error)
+
+	// CreateFromHub creates an extension from Google's prebuilt extension hub.
+	CreateFromHub(ctx context.Context, extensionType PrebuiltExtensionType) (*Extension, error)
+
+	// ListExtensions lists all extensions in the project and location.
+	ListExtensions(ctx context.Context, req *aiplatformpb.ListExtensionsRequest) (*aiplatformpb.ListExtensionsResponse, error)
+
+	// GetExtension retrieves a specific extension by its resource name.
+	GetExtension(ctx context.Context, req *aiplatformpb.GetExtensionRequest) (*Extension, error)
+
+	// DeleteExtension deletes an extension.
+	DeleteExtension(ctx context.Context, req *aiplatformpb.DeleteExtensionRequest) error
+
+	// ExecuteCodeInterpreter executes a code interpreter operation with simplified parameters.
+	ExecuteCodeInterpreter(ctx context.Context, extensionName, query string, files []string) (*CodeInterpreterExecutionResponse, error)
+
+	// ExecuteVertexAISearch executes a Vertex AI Search operation with simplified parameters.
+	ExecuteVertexAISearch(ctx context.Context, extensionName, query string, maxResults int32) (*VertexAISearchExecutionResponse, error)
+
+	// CreateCodeInterpreterExtension creates a code interpreter extension with default configuration.
+	CreateCodeInterpreterExtension(ctx context.Context) (*Extension, error)
+
+	// CreateVertexAISearchExtension creates a Vertex AI Search extension with the specified serving config.
+	CreateVertexAISearchExtension(ctx context.Context, servingConfigName string) (*Extension, error)
+
+	// GetSupportedPrebuiltExtensions returns a list of supported prebuilt extension types.
+	GetSupportedPrebuiltExtensions() []PrebuiltExtensionType
+
+	// ValidatePrebuiltExtensionType validates that the extension type is supported.
+	ValidatePrebuiltExtensionType(extensionType PrebuiltExtensionType) error
+
+	// Close closes the Extension Execution service and releases any resources.
+	Close() error
+}
+
+type service struct {
 	// AI Platform clients
 	extensionExecutionClient *aiplatform.ExtensionExecutionClient
 	extensionRegistryClient  *aiplatform.ExtensionRegistryClient
@@ -99,15 +139,7 @@ type Service struct {
 	mu          sync.RWMutex
 }
 
-// ServiceOption is a functional option for configuring the extension service.
-type ServiceOption func(*Service)
-
-// WithLogger sets a custom logger for the service.
-func WithLogger(logger *slog.Logger) ServiceOption {
-	return func(s *Service) {
-		s.logger = logger
-	}
-}
+var _ Service = (*service)(nil)
 
 // NewService creates a new Vertex AI Extension service.
 //
@@ -121,7 +153,7 @@ func WithLogger(logger *slog.Logger) ServiceOption {
 //   - opts: Optional configuration options
 //
 // Returns a fully initialized extension service or an error if initialization fails.
-func NewService(ctx context.Context, projectID, location string, opts ...ServiceOption) (*Service, error) {
+func NewService(ctx context.Context, projectID, location string, opts ...option.ClientOption) (*service, error) {
 	if projectID == "" {
 		return nil, fmt.Errorf("projectID is required")
 	}
@@ -137,34 +169,19 @@ func NewService(ctx context.Context, projectID, location string, opts ...Service
 		}
 	}
 
-	service := &Service{
+	service := &service{
 		projectID: projectID,
 		location:  location,
 		logger:    slog.Default(),
 	}
 
-	// Apply options
-	for _, opt := range opts {
-		opt(service)
-	}
-
-	// Create credentials
-	creds, err := credentials.DetectDefault(&credentials.DetectOptions{
-		Scopes: []string{
-			"https://www.googleapis.com/auth/cloud-platform",
-		},
-	})
-	if err != nil {
-		return nil, fmt.Errorf("failed to detect default credentials: %w", err)
-	}
-
-	extensionExecutionClient, err := aiplatform.NewExtensionExecutionClient(ctx, option.WithAuthCredentials(creds))
+	extensionExecutionClient, err := aiplatform.NewExtensionExecutionClient(ctx, opts...)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create AI Platform Extension Execution client: %w", err)
 	}
 	service.extensionExecutionClient = extensionExecutionClient
 
-	extensionRegistryClient, err := aiplatform.NewExtensionRegistryClient(ctx, option.WithAuthCredentials(creds))
+	extensionRegistryClient, err := aiplatform.NewExtensionRegistryClient(ctx, opts...)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create AI Platform Extension Execution client: %w", err)
 	}
@@ -181,7 +198,7 @@ func NewService(ctx context.Context, projectID, location string, opts ...Service
 }
 
 // Close closes the Extension Execution service and releases any resources.
-func (s *Service) Close() error {
+func (s *service) Close() error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
@@ -212,21 +229,7 @@ func (s *Service) Close() error {
 // This method allows you to register a custom extension with Vertex AI by providing
 // a manifest that defines the API specification, authentication configuration,
 // and runtime settings.
-func (s *Service) CreateExtension(ctx context.Context, manifest *aiplatformpb.ExtensionManifest, extensionName, displayName, description string, runtimeConfig *aiplatformpb.RuntimeConfig) (*Extension, error) {
-	extension := &aiplatformpb.Extension{
-		Name:        extensionName,
-		DisplayName: displayName,
-		Description: description,
-		Manifest:    manifest,
-	}
-	if runtimeConfig != nil {
-		extension.RuntimeConfig = runtimeConfig
-	}
-
-	req := &aiplatformpb.ImportExtensionRequest{
-		Parent:    fmt.Sprintf("projects/%s/locations/%s", s.projectID, s.location),
-		Extension: extension,
-	}
+func (s *service) CreateExtension(ctx context.Context, req *aiplatformpb.ImportExtensionRequest) (*Extension, error) {
 	operationFuture, err := s.extensionRegistryClient.ImportExtension(ctx, req)
 	if err != nil {
 		return nil, fmt.Errorf("failed to import extension config: %w", err)
@@ -258,7 +261,7 @@ func (s *Service) CreateExtension(ctx context.Context, manifest *aiplatformpb.Ex
 // This method allows you to invoke extension operations with structured parameters
 // and receive the execution results. The operation parameters are specific to
 // each extension and operation type.
-func (s *Service) ExecuteExtension(ctx context.Context, req *ExecuteExtensionRequest) (*ExecuteExtensionResponse, error) {
+func (s *service) ExecuteExtension(ctx context.Context, req *aiplatformpb.ExecuteExtensionRequest) (*aiplatformpb.ExecuteExtensionResponse, error) {
 	if req == nil {
 		return nil, fmt.Errorf("request cannot be nil")
 	}
@@ -277,7 +280,7 @@ func (s *Service) ExecuteExtension(ctx context.Context, req *ExecuteExtensionReq
 	// TODO: Implement actual API call to execute extension
 	// For now, return a mock response
 	// Create a mock response using the protobuf structure
-	_ = &ExecuteExtensionResponse{
+	_ = &aiplatformpb.ExecuteExtensionResponse{
 		Content: `{"result": "mock execution result"}`,
 	}
 
@@ -286,7 +289,7 @@ func (s *Service) ExecuteExtension(ctx context.Context, req *ExecuteExtensionReq
 		slog.String("operation_id", req.OperationId),
 	)
 
-	return &ExecuteExtensionResponse{
+	return &aiplatformpb.ExecuteExtensionResponse{
 		Content: `{"result": "mock execution result"}`,
 	}, nil
 }
@@ -295,30 +298,30 @@ func (s *Service) ExecuteExtension(ctx context.Context, req *ExecuteExtensionReq
 //
 // This method provides easy access to Google's curated extensions like
 // code_interpreter and vertex_ai_search without requiring manual manifest creation.
-func (s *Service) CreateFromHub(ctx context.Context, name string, runtimeConfig *aiplatformpb.RuntimeConfig) (*Extension, error) {
-	s.logger.InfoContext(ctx, "Creating extension from hub", slog.String("name", name))
+func (s *service) CreateFromHub(ctx context.Context, extensionType PrebuiltExtensionType) (*Extension, error) {
+	s.logger.InfoContext(ctx, "Creating extension from hub", slog.String("name", string(extensionType)))
 
-	switch name {
+	extensionInfo := VertexExtensionHub[extensionType]
+
+	switch extensionType {
 	case "code_interpreter":
-		if _, ok := runtimeConfig.GetGoogleFirstPartyExtensionConfig().(*aiplatformpb.RuntimeConfig_CodeInterpreterRuntimeConfig_); !ok {
+		if _, ok := extensionInfo.GetExtension().GetRuntimeConfig().GetGoogleFirstPartyExtensionConfig().(*aiplatformpb.RuntimeConfig_CodeInterpreterRuntimeConfig_); !ok {
 			return nil, errors.New("code_interpreter_runtime_config is required for code_interpreter extension")
 		}
 	case "vertex_ai_search":
-		if runtimeConfig == nil {
+		if extensionInfo.GetExtension().GetRuntimeConfig() == nil {
 			return nil, errors.New("runtime_config is required for vertex_ai_search extension")
 		}
-		if _, ok := runtimeConfig.GetGoogleFirstPartyExtensionConfig().(*aiplatformpb.RuntimeConfig_VertexAiSearchRuntimeConfig); !ok {
+		if _, ok := extensionInfo.GetExtension().GetRuntimeConfig().GetGoogleFirstPartyExtensionConfig().(*aiplatformpb.RuntimeConfig_VertexAiSearchRuntimeConfig); !ok {
 			return nil, errors.New("runtime_config is required for vertex_ai_search extension")
 		}
 	case "webpage_browser":
 		// nothing to do
 	default:
-		return nil, fmt.Errorf("unsupported 1P extension name: %s", name)
+		return nil, fmt.Errorf("unsupported 1P extension name: %s", extensionType)
 	}
 
-	extensionInfo := VertexExtensionHub[name]
-
-	extension, err := s.CreateExtension(ctx, extensionInfo.manifest, name, extensionInfo.displayName, extensionInfo.description, runtimeConfig)
+	extension, err := s.CreateExtension(ctx, extensionInfo)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create extension from hub: %w", err)
 	}
@@ -329,9 +332,9 @@ func (s *Service) CreateFromHub(ctx context.Context, name string, runtimeConfig 
 }
 
 // ListExtensions lists all extensions in the project and location.
-func (s *Service) ListExtensions(ctx context.Context, req *ListExtensionsRequest) (*ListExtensionsResponse, error) {
+func (s *service) ListExtensions(ctx context.Context, req *aiplatformpb.ListExtensionsRequest) (*aiplatformpb.ListExtensionsResponse, error) {
 	if req == nil {
-		req = &ListExtensionsRequest{}
+		req = &aiplatformpb.ListExtensionsRequest{}
 	}
 
 	s.logger.InfoContext(ctx, "Listing extensions",
@@ -341,7 +344,7 @@ func (s *Service) ListExtensions(ctx context.Context, req *ListExtensionsRequest
 
 	// TODO: Implement actual API call to list extensions
 	// For now, return empty response
-	response := &ListExtensionsResponse{
+	response := &aiplatformpb.ListExtensionsResponse{
 		Extensions:    []*aiplatformpb.Extension{},
 		NextPageToken: "",
 	}
@@ -354,7 +357,7 @@ func (s *Service) ListExtensions(ctx context.Context, req *ListExtensionsRequest
 }
 
 // GetExtension retrieves a specific extension by its resource name.
-func (s *Service) GetExtension(ctx context.Context, req *GetExtensionRequest) (*Extension, error) {
+func (s *service) GetExtension(ctx context.Context, req *aiplatformpb.GetExtensionRequest) (*Extension, error) {
 	if req == nil {
 		return nil, fmt.Errorf("request cannot be nil")
 	}
@@ -374,7 +377,7 @@ func (s *Service) GetExtension(ctx context.Context, req *GetExtensionRequest) (*
 }
 
 // DeleteExtension deletes an extension.
-func (s *Service) DeleteExtension(ctx context.Context, req *DeleteExtensionRequest) error {
+func (s *service) DeleteExtension(ctx context.Context, req *aiplatformpb.DeleteExtensionRequest) error {
 	if req == nil {
 		return fmt.Errorf("request cannot be nil")
 	}
@@ -397,8 +400,8 @@ func (s *Service) DeleteExtension(ctx context.Context, req *DeleteExtensionReque
 // Convenience Methods for Prebuilt Extensions
 
 // ExecuteCodeInterpreter executes a code interpreter operation with simplified parameters.
-func (s *Service) ExecuteCodeInterpreter(ctx context.Context, extensionName, query string, files []string) (*CodeInterpreterExecutionResponse, error) {
-	req := &ExecuteExtensionRequest{
+func (s *service) ExecuteCodeInterpreter(ctx context.Context, extensionName, query string, files []string) (*CodeInterpreterExecutionResponse, error) {
+	req := &aiplatformpb.ExecuteExtensionRequest{
 		Name:        extensionName,
 		OperationId: "generate_and_execute",
 		// Note: OperationParams should be *structpb.Struct, but for now we'll handle conversion later
@@ -421,8 +424,8 @@ func (s *Service) ExecuteCodeInterpreter(ctx context.Context, extensionName, que
 }
 
 // ExecuteVertexAISearch executes a Vertex AI Search operation with simplified parameters.
-func (s *Service) ExecuteVertexAISearch(ctx context.Context, extensionName, query string, maxResults int32) (*VertexAISearchExecutionResponse, error) {
-	req := &ExecuteExtensionRequest{
+func (s *service) ExecuteVertexAISearch(ctx context.Context, extensionName, query string, maxResults int32) (*VertexAISearchExecutionResponse, error) {
+	req := &aiplatformpb.ExecuteExtensionRequest{
 		Name:        extensionName,
 		OperationId: "search",
 		// Note: OperationParams should be *structpb.Struct, but for now we'll handle conversion later
@@ -445,18 +448,18 @@ func (s *Service) ExecuteVertexAISearch(ctx context.Context, extensionName, quer
 // Helper Methods
 
 // generateExtensionID generates a unique extension ID.
-func (s *Service) generateExtensionID() string {
+func (s *service) generateExtensionID() string {
 	// In a real implementation, this would generate a unique ID
 	return fmt.Sprintf("ext_%d", time.Now().UnixNano())
 }
 
 // generateExtensionName generates the full resource name for an extension.
-func (s *Service) generateExtensionName(extensionID string) string {
+func (s *service) generateExtensionName(extensionID string) string {
 	return fmt.Sprintf("projects/%s/locations/%s/extensions/%s", s.projectID, s.location, extensionID)
 }
 
 // validateManifest validates an extension manifest.
-func (s *Service) validateManifest(manifest *ExtensionManifest) error {
+func (s *service) validateManifest(manifest *aiplatformpb.ExtensionManifest) error {
 	if manifest.Name == "" {
 		return fmt.Errorf("manifest name is required")
 	}
@@ -487,7 +490,7 @@ func (s *Service) validateManifest(manifest *ExtensionManifest) error {
 	if manifest.AuthConfig == nil {
 		return fmt.Errorf("authentication configuration is required")
 	}
-	if manifest.AuthConfig.AuthType == AuthTypeUnspecified {
+	if manifest.AuthConfig.AuthType == aiplatformpb.AuthType_AUTH_TYPE_UNSPECIFIED {
 		return fmt.Errorf("authentication type must be specified")
 	}
 
@@ -497,16 +500,21 @@ func (s *Service) validateManifest(manifest *ExtensionManifest) error {
 // Configuration Access Methods
 
 // GetProjectID returns the configured Google Cloud project ID.
-func (s *Service) GetProjectID() string {
+func (s *service) GetProjectID() string {
 	return s.projectID
 }
 
 // GetLocation returns the configured geographic location.
-func (s *Service) GetLocation() string {
+func (s *service) GetLocation() string {
 	return s.location
 }
 
 // GetLogger returns the configured logger instance.
-func (s *Service) GetLogger() *slog.Logger {
+func (s *service) GetLogger() *slog.Logger {
 	return s.logger
+}
+
+// GetParent returns the resource name of the Location to import the Extension in.
+func (s *service) GetParent() string {
+	return "projects/" + s.projectID + "/locations/" + s.location
 }

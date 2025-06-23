@@ -13,16 +13,31 @@ import (
 )
 
 // ExampleService handles example management operations within Example Stores.
-type ExampleService struct {
+type ExampleService interface {
+	GetExample(ctx context.Context, exampleName string) (*StoredExample, error)
+	ListExamples(ctx context.Context, req *ListExamplesRequest) (*ListExamplesResponse, error)
+	UploadExamples(ctx context.Context, req *UploadExamplesRequest) (*UploadExamplesResponse, error)
+	DeleteExample(ctx context.Context, req *DeleteExampleRequest) error
+	BatchDeleteExamples(ctx context.Context, req *BatchDeleteExamplesRequest) error
+	UpdateExample(ctx context.Context, example *StoredExample, updateMask []string) (*StoredExample, error)
+	ListAllExamples(ctx context.Context, storeName string) ([]*StoredExample, error)
+	UploadExamplesFromSlice(ctx context.Context, storeName string, examples []*Example) ([]*StoredExample, error)
+	ValidateUploadRequest(req *UploadExamplesRequest) error
+	GetExampleMetrics(ctx context.Context, storeName string) (map[string]any, error)
+}
+
+type exampleService struct {
 	client    *aiplatform.VertexRagDataClient
 	projectID string
 	location  string
 	logger    *slog.Logger
 }
 
+var _ ExampleService = (*exampleService)(nil)
+
 // NewExampleService creates a new example service.
-func NewExampleService(client *aiplatform.VertexRagDataClient, projectID, location string, logger *slog.Logger) *ExampleService {
-	return &ExampleService{
+func NewExampleService(client *aiplatform.VertexRagDataClient, projectID, location string, logger *slog.Logger) *exampleService {
+	return &exampleService{
 		client:    client,
 		projectID: projectID,
 		location:  location,
@@ -30,8 +45,71 @@ func NewExampleService(client *aiplatform.VertexRagDataClient, projectID, locati
 	}
 }
 
+// GetExample retrieves a specific example.
+func (e *exampleService) GetExample(ctx context.Context, exampleName string) (*StoredExample, error) {
+	e.logger.InfoContext(ctx, "Getting example",
+		slog.String("example_name", exampleName),
+	)
+
+	// TODO: Replace with actual Vertex AI API call
+	// This would typically involve calling something like:
+	// resp, err := e.client.GetExample(ctx, protoReq)
+
+	// For now, return a mock example
+	now := time.Now()
+	example := &StoredExample{
+		Name:        exampleName,
+		DisplayName: "Mock Example",
+		Input: &Content{
+			Text:     "What is the capital of France?",
+			Metadata: map[string]any{"category": "geography"},
+		},
+		Output: &Content{
+			Text:     "The capital of France is Paris.",
+			Metadata: map[string]any{"confidence": 0.95},
+		},
+		Metadata:        map[string]any{"source": "mock", "difficulty": "easy"},
+		CreateTime:      now,
+		UpdateTime:      now,
+		State:           ExampleStateActive,
+		EmbeddingVector: generateMockEmbedding("What is the capital of France?"),
+	}
+
+	e.logger.InfoContext(ctx, "Retrieved example",
+		slog.String("example_name", example.Name),
+		slog.String("state", string(example.State)),
+	)
+
+	return example, nil
+}
+
+// ListExamples lists examples in an Example Store.
+func (e *exampleService) ListExamples(ctx context.Context, req *ListExamplesRequest) (*ListExamplesResponse, error) {
+	e.logger.InfoContext(ctx, "Listing examples",
+		slog.String("store", req.Parent),
+		slog.Int("page_size", int(req.PageSize)),
+	)
+
+	// TODO: Replace with actual Vertex AI API call
+	// This would typically involve calling something like:
+	// resp, err := e.client.ListExamples(ctx, protoReq)
+
+	// For now, return empty list as this is a mock implementation
+	response := &ListExamplesResponse{
+		Examples:      []*StoredExample{},
+		NextPageToken: "",
+	}
+
+	e.logger.InfoContext(ctx, "Listed examples",
+		slog.String("store", req.Parent),
+		slog.Int("example_count", len(response.Examples)),
+	)
+
+	return response, nil
+}
+
 // UploadExamples uploads examples to an Example Store.
-func (e *ExampleService) UploadExamples(ctx context.Context, req *UploadExamplesRequest) (*UploadExamplesResponse, error) {
+func (e *exampleService) UploadExamples(ctx context.Context, req *UploadExamplesRequest) (*UploadExamplesResponse, error) {
 	e.logger.InfoContext(ctx, "Uploading examples",
 		slog.String("store", req.Parent),
 		slog.Int("example_count", len(req.Examples)),
@@ -59,8 +137,8 @@ func (e *ExampleService) UploadExamples(ctx context.Context, req *UploadExamples
 			Input:       example.Input,
 			Output:      example.Output,
 			Metadata:    example.Metadata,
-			CreateTime:  &now,
-			UpdateTime:  &now,
+			CreateTime:  now,
+			UpdateTime:  now,
 			State:       ExampleStateActive,
 			// TODO: Generate actual embedding vector using the store's embedding model
 			EmbeddingVector: generateMockEmbedding(example.Input.Text),
@@ -86,71 +164,8 @@ func (e *ExampleService) UploadExamples(ctx context.Context, req *UploadExamples
 	return response, nil
 }
 
-// ListExamples lists examples in an Example Store.
-func (e *ExampleService) ListExamples(ctx context.Context, req *ListExamplesRequest) (*ListExamplesResponse, error) {
-	e.logger.InfoContext(ctx, "Listing examples",
-		slog.String("store", req.Parent),
-		slog.Int("page_size", int(req.PageSize)),
-	)
-
-	// TODO: Replace with actual Vertex AI API call
-	// This would typically involve calling something like:
-	// resp, err := e.client.ListExamples(ctx, protoReq)
-
-	// For now, return empty list as this is a mock implementation
-	response := &ListExamplesResponse{
-		Examples:      []*StoredExample{},
-		NextPageToken: "",
-	}
-
-	e.logger.InfoContext(ctx, "Listed examples",
-		slog.String("store", req.Parent),
-		slog.Int("example_count", len(response.Examples)),
-	)
-
-	return response, nil
-}
-
-// GetExample retrieves a specific example.
-func (e *ExampleService) GetExample(ctx context.Context, exampleName string) (*StoredExample, error) {
-	e.logger.InfoContext(ctx, "Getting example",
-		slog.String("example_name", exampleName),
-	)
-
-	// TODO: Replace with actual Vertex AI API call
-	// This would typically involve calling something like:
-	// resp, err := e.client.GetExample(ctx, protoReq)
-
-	// For now, return a mock example
-	now := time.Now()
-	example := &StoredExample{
-		Name:        exampleName,
-		DisplayName: "Mock Example",
-		Input: &Content{
-			Text:     "What is the capital of France?",
-			Metadata: map[string]any{"category": "geography"},
-		},
-		Output: &Content{
-			Text:     "The capital of France is Paris.",
-			Metadata: map[string]any{"confidence": 0.95},
-		},
-		Metadata:        map[string]any{"source": "mock", "difficulty": "easy"},
-		CreateTime:      &now,
-		UpdateTime:      &now,
-		State:           ExampleStateActive,
-		EmbeddingVector: generateMockEmbedding("What is the capital of France?"),
-	}
-
-	e.logger.InfoContext(ctx, "Retrieved example",
-		slog.String("example_name", example.Name),
-		slog.String("state", string(example.State)),
-	)
-
-	return example, nil
-}
-
 // DeleteExample deletes a specific example.
-func (e *ExampleService) DeleteExample(ctx context.Context, req *DeleteExampleRequest) error {
+func (e *exampleService) DeleteExample(ctx context.Context, req *DeleteExampleRequest) error {
 	e.logger.InfoContext(ctx, "Deleting example",
 		slog.String("example_name", req.Name),
 	)
@@ -167,7 +182,7 @@ func (e *ExampleService) DeleteExample(ctx context.Context, req *DeleteExampleRe
 }
 
 // BatchDeleteExamples deletes multiple examples.
-func (e *ExampleService) BatchDeleteExamples(ctx context.Context, req *BatchDeleteExamplesRequest) error {
+func (e *exampleService) BatchDeleteExamples(ctx context.Context, req *BatchDeleteExamplesRequest) error {
 	e.logger.InfoContext(ctx, "Batch deleting examples",
 		slog.Int("example_count", len(req.Names)),
 	)
@@ -189,7 +204,7 @@ func (e *ExampleService) BatchDeleteExamples(ctx context.Context, req *BatchDele
 }
 
 // UpdateExample updates an existing example.
-func (e *ExampleService) UpdateExample(ctx context.Context, example *StoredExample, updateMask []string) (*StoredExample, error) {
+func (e *exampleService) UpdateExample(ctx context.Context, example *StoredExample, updateMask []string) (*StoredExample, error) {
 	e.logger.InfoContext(ctx, "Updating example",
 		slog.String("example_name", example.Name),
 		slog.Any("update_mask", updateMask),
@@ -200,8 +215,7 @@ func (e *ExampleService) UpdateExample(ctx context.Context, example *StoredExamp
 	// resp, err := e.client.UpdateExample(ctx, protoReq)
 
 	// Update the timestamp
-	now := time.Now()
-	example.UpdateTime = &now
+	example.UpdateTime = time.Now()
 
 	e.logger.InfoContext(ctx, "Example updated",
 		slog.String("example_name", example.Name),
@@ -211,7 +225,7 @@ func (e *ExampleService) UpdateExample(ctx context.Context, example *StoredExamp
 }
 
 // ListAllExamples lists all examples in a store, handling pagination automatically.
-func (e *ExampleService) ListAllExamples(ctx context.Context, storeName string) ([]*StoredExample, error) {
+func (e *exampleService) ListAllExamples(ctx context.Context, storeName string) ([]*StoredExample, error) {
 	e.logger.InfoContext(ctx, "Listing all examples",
 		slog.String("store", storeName),
 	)
@@ -246,7 +260,7 @@ func (e *ExampleService) ListAllExamples(ctx context.Context, storeName string) 
 }
 
 // UploadExamplesFromSlice uploads examples from a slice, automatically batching.
-func (e *ExampleService) UploadExamplesFromSlice(ctx context.Context, storeName string, examples []*Example) ([]*StoredExample, error) {
+func (e *exampleService) UploadExamplesFromSlice(ctx context.Context, storeName string, examples []*Example) ([]*StoredExample, error) {
 	e.logger.InfoContext(ctx, "Uploading examples from slice",
 		slog.String("store", storeName),
 		slog.Int("total_examples", len(examples)),
@@ -260,10 +274,7 @@ func (e *ExampleService) UploadExamplesFromSlice(ctx context.Context, storeName 
 	batchSize := MaxExamplesPerUpload
 
 	for i := 0; i < len(examples); i += batchSize {
-		end := i + batchSize
-		if end > len(examples) {
-			end = len(examples)
-		}
+		end := min(i+batchSize, len(examples))
 
 		batch := examples[i:end]
 		req := &UploadExamplesRequest{
@@ -327,7 +338,7 @@ func generateMockEmbedding(text string) []float32 {
 }
 
 // ValidateUploadRequest validates an upload examples request.
-func (e *ExampleService) ValidateUploadRequest(req *UploadExamplesRequest) error {
+func (e *exampleService) ValidateUploadRequest(req *UploadExamplesRequest) error {
 	if req == nil {
 		return fmt.Errorf("request is nil")
 	}
@@ -340,7 +351,7 @@ func (e *ExampleService) ValidateUploadRequest(req *UploadExamplesRequest) error
 }
 
 // GetExampleMetrics calculates metrics for examples in a store.
-func (e *ExampleService) GetExampleMetrics(ctx context.Context, storeName string) (map[string]any, error) {
+func (e *exampleService) GetExampleMetrics(ctx context.Context, storeName string) (map[string]any, error) {
 	e.logger.InfoContext(ctx, "Calculating example metrics",
 		slog.String("store", storeName),
 	)

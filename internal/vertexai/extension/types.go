@@ -90,51 +90,12 @@ type ExtensionError struct {
 	Details []any `json:"details,omitempty"`
 }
 
-// Type aliases for protobuf types to provide a cleaner API
-type (
-	// ExtensionManifest represents the manifest spec of an extension.
-	ExtensionManifest = aiplatformpb.ExtensionManifest
-
-	// AuthConfig specifies authentication configuration for extensions.
-	AuthConfig = aiplatformpb.AuthConfig
-
-	// AuthType represents the authentication type for extensions.
-	AuthType = aiplatformpb.AuthType
-
-	// RuntimeConfig contains runtime-specific configuration for extensions.
-	RuntimeConfig = aiplatformpb.RuntimeConfig
-)
-
-// Authentication type constants mapped from protobuf
-const (
-	// AuthTypeUnspecified indicates unspecified authentication.
-	AuthTypeUnspecified = aiplatformpb.AuthType_AUTH_TYPE_UNSPECIFIED
-
-	// AuthTypeNoAuth indicates no authentication.
-	AuthTypeNoAuth = aiplatformpb.AuthType_NO_AUTH
-
-	// AuthTypeAPIKey uses API key authentication.
-	AuthTypeAPIKey = aiplatformpb.AuthType_API_KEY_AUTH
-
-	// AuthTypeHTTPBasic uses HTTP Basic authentication.
-	AuthTypeHTTPBasic = aiplatformpb.AuthType_HTTP_BASIC_AUTH
-
-	// AuthTypeGoogleServiceAccount uses Google Service Account authentication.
-	AuthTypeGoogleServiceAccount = aiplatformpb.AuthType_GOOGLE_SERVICE_ACCOUNT_AUTH
-
-	// AuthTypeOAuth uses OAuth authentication.
-	AuthTypeOAuth = aiplatformpb.AuthType_OAUTH
-
-	// AuthTypeOIDC uses OpenID Connect authentication.
-	AuthTypeOIDC = aiplatformpb.AuthType_OIDC_AUTH
-)
-
 // Helper functions for creating auth configs
 
 // NewGoogleServiceAccountConfig creates a new Google Service Account auth config.
-func NewGoogleServiceAccountConfig(serviceAccount string) *AuthConfig {
-	return &AuthConfig{
-		AuthType: AuthTypeGoogleServiceAccount,
+func NewGoogleServiceAccountConfig(serviceAccount string) *aiplatformpb.AuthConfig {
+	return &aiplatformpb.AuthConfig{
+		AuthType: aiplatformpb.AuthType_GOOGLE_SERVICE_ACCOUNT_AUTH,
 		AuthConfig: &aiplatformpb.AuthConfig_GoogleServiceAccountConfig_{
 			GoogleServiceAccountConfig: &aiplatformpb.AuthConfig_GoogleServiceAccountConfig{
 				ServiceAccount: serviceAccount,
@@ -144,9 +105,9 @@ func NewGoogleServiceAccountConfig(serviceAccount string) *AuthConfig {
 }
 
 // NewAPIKeyConfig creates a new API key auth config.
-func NewAPIKeyConfig(secretName, header string) *AuthConfig {
-	return &AuthConfig{
-		AuthType: AuthTypeAPIKey,
+func NewAPIKeyConfig(secretName, header string) *aiplatformpb.AuthConfig {
+	return &aiplatformpb.AuthConfig{
+		AuthType: aiplatformpb.AuthType_API_KEY_AUTH,
 		AuthConfig: &aiplatformpb.AuthConfig_ApiKeyConfig_{
 			ApiKeyConfig: &aiplatformpb.AuthConfig_ApiKeyConfig{
 				ApiKeySecret: secretName,
@@ -157,9 +118,9 @@ func NewAPIKeyConfig(secretName, header string) *AuthConfig {
 }
 
 // NewHTTPBasicAuthConfig creates a new HTTP Basic auth config.
-func NewHTTPBasicAuthConfig(credentialSecret string) *AuthConfig {
-	return &AuthConfig{
-		AuthType: AuthTypeHTTPBasic,
+func NewHTTPBasicAuthConfig(credentialSecret string) *aiplatformpb.AuthConfig {
+	return &aiplatformpb.AuthConfig{
+		AuthType: aiplatformpb.AuthType_HTTP_BASIC_AUTH,
 		AuthConfig: &aiplatformpb.AuthConfig_HttpBasicAuthConfig_{
 			HttpBasicAuthConfig: &aiplatformpb.AuthConfig_HttpBasicAuthConfig{
 				CredentialSecret: credentialSecret,
@@ -169,9 +130,9 @@ func NewHTTPBasicAuthConfig(credentialSecret string) *AuthConfig {
 }
 
 // NewOAuthConfigWithAccessToken creates a new OAuth auth config with access token.
-func NewOAuthConfigWithAccessToken(accessToken string) *AuthConfig {
-	return &AuthConfig{
-		AuthType: AuthTypeOAuth,
+func NewOAuthConfigWithAccessToken(accessToken string) *aiplatformpb.AuthConfig {
+	return &aiplatformpb.AuthConfig{
+		AuthType: aiplatformpb.AuthType_OAUTH,
 		AuthConfig: &aiplatformpb.AuthConfig_OauthConfig_{
 			OauthConfig: &aiplatformpb.AuthConfig_OauthConfig{
 				OauthConfig: &aiplatformpb.AuthConfig_OauthConfig_AccessToken{
@@ -183,9 +144,9 @@ func NewOAuthConfigWithAccessToken(accessToken string) *AuthConfig {
 }
 
 // NewOAuthConfigWithServiceAccount creates a new OAuth auth config with service account.
-func NewOAuthConfigWithServiceAccount(serviceAccount string) *AuthConfig {
-	return &AuthConfig{
-		AuthType: AuthTypeOAuth,
+func NewOAuthConfigWithServiceAccount(serviceAccount string) *aiplatformpb.AuthConfig {
+	return &aiplatformpb.AuthConfig{
+		AuthType: aiplatformpb.AuthType_OAUTH,
 		AuthConfig: &aiplatformpb.AuthConfig_OauthConfig_{
 			OauthConfig: &aiplatformpb.AuthConfig_OauthConfig{
 				OauthConfig: &aiplatformpb.AuthConfig_OauthConfig_ServiceAccount{
@@ -199,8 +160,8 @@ func NewOAuthConfigWithServiceAccount(serviceAccount string) *AuthConfig {
 // Helper functions for creating runtime configs
 
 // NewCodeInterpreterRuntimeConfig creates a new code interpreter runtime config.
-func NewCodeInterpreterRuntimeConfig(inputBucket, outputBucket string) *RuntimeConfig {
-	return &RuntimeConfig{
+func NewCodeInterpreterRuntimeConfig(inputBucket, outputBucket string) *aiplatformpb.RuntimeConfig {
+	return &aiplatformpb.RuntimeConfig{
 		GoogleFirstPartyExtensionConfig: &aiplatformpb.RuntimeConfig_CodeInterpreterRuntimeConfig_{
 			CodeInterpreterRuntimeConfig: &aiplatformpb.RuntimeConfig_CodeInterpreterRuntimeConfig{
 				FileInputGcsBucket:  inputBucket,
@@ -211,8 +172,8 @@ func NewCodeInterpreterRuntimeConfig(inputBucket, outputBucket string) *RuntimeC
 }
 
 // NewVertexAISearchRuntimeConfig creates a new Vertex AI Search runtime config.
-func NewVertexAISearchRuntimeConfig(servingConfigName, engineID string) *RuntimeConfig {
-	return &RuntimeConfig{
+func NewVertexAISearchRuntimeConfig(servingConfigName, engineID string) *aiplatformpb.RuntimeConfig {
+	return &aiplatformpb.RuntimeConfig{
 		GoogleFirstPartyExtensionConfig: &aiplatformpb.RuntimeConfig_VertexAiSearchRuntimeConfig{
 			VertexAiSearchRuntimeConfig: &aiplatformpb.RuntimeConfig_VertexAISearchRuntimeConfig{
 				ServingConfigName: servingConfigName,
@@ -225,8 +186,8 @@ func NewVertexAISearchRuntimeConfig(servingConfigName, engineID string) *Runtime
 // Helper functions for creating extension manifests
 
 // NewExtensionManifest creates a new extension manifest.
-func NewExtensionManifest(name, description, openAPIGCSURI string, authConfig *AuthConfig) *ExtensionManifest {
-	return &ExtensionManifest{
+func NewExtensionManifest(name, description, openAPIGCSURI string, authConfig *aiplatformpb.AuthConfig) *aiplatformpb.ExtensionManifest {
+	return &aiplatformpb.ExtensionManifest{
 		Name:        name,
 		Description: description,
 		ApiSpec: &aiplatformpb.ExtensionManifest_ApiSpec{
@@ -239,8 +200,8 @@ func NewExtensionManifest(name, description, openAPIGCSURI string, authConfig *A
 }
 
 // NewExtensionManifestWithYAML creates a new extension manifest with inline YAML.
-func NewExtensionManifestWithYAML(name, description, openAPIYAML string, authConfig *AuthConfig) *ExtensionManifest {
-	return &ExtensionManifest{
+func NewExtensionManifestWithYAML(name, description, openAPIYAML string, authConfig *aiplatformpb.AuthConfig) *aiplatformpb.ExtensionManifest {
+	return &aiplatformpb.ExtensionManifest{
 		Name:        name,
 		Description: description,
 		ApiSpec: &aiplatformpb.ExtensionManifest_ApiSpec{
@@ -252,44 +213,10 @@ func NewExtensionManifestWithYAML(name, description, openAPIYAML string, authCon
 	}
 }
 
-// Request and Response Types - using protobuf types
-type (
-	// ImportExtensionRequest contains parameters for importing/creating a new extension.
-	// This replaces the custom CreateExtensionRequest to align with the protobuf API.
-	ImportExtensionRequest = aiplatformpb.ImportExtensionRequest
-
-	// ListExtensionsRequest contains parameters for listing extensions.
-	ListExtensionsRequest = aiplatformpb.ListExtensionsRequest
-
-	// ListExtensionsResponse contains the response from listing extensions.
-	ListExtensionsResponse = aiplatformpb.ListExtensionsResponse
-
-	// GetExtensionRequest contains parameters for getting a specific extension.
-	GetExtensionRequest = aiplatformpb.GetExtensionRequest
-
-	// DeleteExtensionRequest contains parameters for deleting an extension.
-	DeleteExtensionRequest = aiplatformpb.DeleteExtensionRequest
-
-	// UpdateExtensionRequest contains parameters for updating an extension.
-	UpdateExtensionRequest = aiplatformpb.UpdateExtensionRequest
-
-	// ExecuteExtensionRequest contains parameters for executing an extension operation.
-	ExecuteExtensionRequest = aiplatformpb.ExecuteExtensionRequest
-
-	// ExecuteExtensionResponse contains the result of executing an extension operation.
-	ExecuteExtensionResponse = aiplatformpb.ExecuteExtensionResponse
-
-	// QueryExtensionRequest contains parameters for querying extension capabilities.
-	QueryExtensionRequest = aiplatformpb.QueryExtensionRequest
-
-	// QueryExtensionResponse contains the response from querying extension capabilities.
-	QueryExtensionResponse = aiplatformpb.QueryExtensionResponse
-)
-
 // Helper functions for creating requests
 
 // NewImportExtensionRequest creates a new import extension request.
-func NewImportExtensionRequest(parent, displayName, description string, manifest *ExtensionManifest, runtimeConfig *RuntimeConfig) *ImportExtensionRequest {
+func NewImportExtensionRequest(parent, displayName, description string, manifest *aiplatformpb.ExtensionManifest, runtimeConfig *aiplatformpb.RuntimeConfig) *aiplatformpb.ImportExtensionRequest {
 	ext := &aiplatformpb.Extension{
 		DisplayName:   displayName,
 		Description:   description,
@@ -297,15 +224,15 @@ func NewImportExtensionRequest(parent, displayName, description string, manifest
 		RuntimeConfig: runtimeConfig,
 	}
 
-	return &ImportExtensionRequest{
+	return &aiplatformpb.ImportExtensionRequest{
 		Parent:    parent,
 		Extension: ext,
 	}
 }
 
 // NewListExtensionsRequest creates a new list extensions request.
-func NewListExtensionsRequest(parent string, pageSize int32, pageToken, filter, orderBy string) *ListExtensionsRequest {
-	return &ListExtensionsRequest{
+func NewListExtensionsRequest(parent string, pageSize int32, pageToken, filter, orderBy string) *aiplatformpb.ListExtensionsRequest {
+	return &aiplatformpb.ListExtensionsRequest{
 		Parent:    parent,
 		PageSize:  pageSize,
 		PageToken: pageToken,
@@ -315,41 +242,18 @@ func NewListExtensionsRequest(parent string, pageSize int32, pageToken, filter, 
 }
 
 // NewGetExtensionRequest creates a new get extension request.
-func NewGetExtensionRequest(name string) *GetExtensionRequest {
-	return &GetExtensionRequest{
+func NewGetExtensionRequest(name string) *aiplatformpb.GetExtensionRequest {
+	return &aiplatformpb.GetExtensionRequest{
 		Name: name,
 	}
 }
 
 // NewDeleteExtensionRequest creates a new delete extension request.
-func NewDeleteExtensionRequest(name string) *DeleteExtensionRequest {
-	return &DeleteExtensionRequest{
+func NewDeleteExtensionRequest(name string) *aiplatformpb.DeleteExtensionRequest {
+	return &aiplatformpb.DeleteExtensionRequest{
 		Name: name,
 	}
 }
-
-// // Backward compatibility types
-//
-// // CreateExtensionRequest provides backward compatibility with the old API.
-// // Deprecated: Use ImportExtensionRequest instead.
-// type CreateExtensionRequest struct {
-// 	// DisplayName is the human-readable name for the extension.
-// 	DisplayName string `json:"display_name"`
-//
-// 	// Description provides details about the extension's purpose.
-// 	Description string `json:"description"`
-//
-// 	// Manifest defines the extension's configuration.
-// 	Manifest *ExtensionManifest `json:"manifest"`
-//
-// 	// RuntimeConfig contains runtime-specific configuration.
-// 	RuntimeConfig *RuntimeConfig `json:"runtime_config,omitempty"`
-// }
-//
-// // ToImportRequest converts a CreateExtensionRequest to an ImportExtensionRequest.
-// func (r *CreateExtensionRequest) ToImportRequest(parent string) *ImportExtensionRequest {
-// 	return NewImportExtensionRequest(parent, r.DisplayName, r.Description, r.Manifest, r.RuntimeConfig)
-// }
 
 // Prebuilt Extension Types
 
@@ -362,6 +266,9 @@ const (
 
 	// PrebuiltExtensionVertexAISearch is the Vertex AI Search extension.
 	PrebuiltExtensionVertexAISearch PrebuiltExtensionType = "vertex_ai_search"
+
+	// PrebuiltExtensionWebpageBrowser is the webpage browser extension.
+	PrebuiltExtensionWebpageBrowser PrebuiltExtensionType = "webpage_browser"
 )
 
 // CodeInterpreterExecutionRequest contains parameters for code interpreter execution.

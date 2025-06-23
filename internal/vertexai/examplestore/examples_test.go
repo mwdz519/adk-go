@@ -4,7 +4,6 @@
 package examplestore
 
 import (
-	"context"
 	"fmt"
 	"strings"
 	"testing"
@@ -88,7 +87,7 @@ func TestExample_Validate(t *testing.T) {
 }
 
 func TestExampleService_UploadExamples(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	service, err := NewService(ctx, "test-project", SupportedRegion)
 	if err != nil {
 		t.Skipf("Skipping test due to credential error: %v", err)
@@ -167,12 +166,12 @@ func TestExampleService_UploadExamples(t *testing.T) {
 			t.Errorf("StoredExample[%d].State = %v, want %v", i, storedExample.State, ExampleStateActive)
 		}
 
-		if storedExample.CreateTime == nil {
-			t.Errorf("StoredExample[%d].CreateTime should not be nil", i)
+		if storedExample.CreateTime.IsZero() {
+			t.Errorf("StoredExample[%d].CreateTime should not be IsZero", i)
 		}
 
-		if storedExample.UpdateTime == nil {
-			t.Errorf("StoredExample[%d].UpdateTime should not be nil", i)
+		if storedExample.UpdateTime.IsZero() {
+			t.Errorf("StoredExample[%d].UpdateTime should not be IsZero", i)
 		}
 
 		if len(storedExample.EmbeddingVector) == 0 {
@@ -182,7 +181,7 @@ func TestExampleService_UploadExamples(t *testing.T) {
 }
 
 func TestExampleService_ListExamples(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	service, err := NewService(ctx, "test-project", SupportedRegion)
 	if err != nil {
 		t.Skipf("Skipping test due to credential error: %v", err)
@@ -214,7 +213,7 @@ func TestExampleService_ListExamples(t *testing.T) {
 }
 
 func TestExampleService_GetExample(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	service, err := NewService(ctx, "test-project", SupportedRegion)
 	if err != nil {
 		t.Skipf("Skipping test due to credential error: %v", err)
@@ -254,7 +253,7 @@ func TestExampleService_GetExample(t *testing.T) {
 }
 
 func TestExampleService_DeleteExample(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	service, err := NewService(ctx, "test-project", SupportedRegion)
 	if err != nil {
 		t.Skipf("Skipping test due to credential error: %v", err)
@@ -274,7 +273,7 @@ func TestExampleService_DeleteExample(t *testing.T) {
 }
 
 func TestExampleService_BatchDeleteExamples(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	service, err := NewService(ctx, "test-project", SupportedRegion)
 	if err != nil {
 		t.Skipf("Skipping test due to credential error: %v", err)
@@ -300,7 +299,7 @@ func TestExampleService_BatchDeleteExamples(t *testing.T) {
 }
 
 func TestExampleService_UpdateExample(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	service, err := NewService(ctx, "test-project", SupportedRegion)
 	if err != nil {
 		t.Skipf("Skipping test due to credential error: %v", err)
@@ -335,13 +334,13 @@ func TestExampleService_UpdateExample(t *testing.T) {
 	}
 
 	// Check that update time was updated
-	if updatedExample.UpdateTime.Before(*originalUpdateTime) {
+	if updatedExample.UpdateTime.Before(originalUpdateTime) {
 		t.Error("StoredExample.UpdateTime should have been updated")
 	}
 }
 
 func TestExampleService_ListAllExamples(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	service, err := NewService(ctx, "test-project", SupportedRegion)
 	if err != nil {
 		t.Skipf("Skipping test due to credential error: %v", err)
@@ -371,7 +370,7 @@ func TestExampleService_ListAllExamples(t *testing.T) {
 }
 
 func TestExampleService_UploadExamplesFromSlice(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	service, err := NewService(ctx, "test-project", SupportedRegion)
 	if err != nil {
 		t.Skipf("Skipping test due to credential error: %v", err)
@@ -384,7 +383,7 @@ func TestExampleService_UploadExamplesFromSlice(t *testing.T) {
 
 	// Create 12 examples to test batching
 	examples := make([]*Example, 12)
-	for i := 0; i < 12; i++ {
+	for i := range 12 {
 		examples[i] = &Example{
 			Input: &Content{
 				Text: fmt.Sprintf("Input text %d", i),
@@ -415,7 +414,7 @@ func TestExampleService_UploadExamplesFromSlice(t *testing.T) {
 }
 
 func TestExampleService_GetExampleMetrics(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	service, err := NewService(ctx, "test-project", SupportedRegion)
 	if err != nil {
 		t.Skipf("Skipping test due to credential error: %v", err)

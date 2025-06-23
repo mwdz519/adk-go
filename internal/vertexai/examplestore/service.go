@@ -9,30 +9,52 @@ import (
 	"log/slog"
 
 	aiplatform "cloud.google.com/go/aiplatform/apiv1beta1"
-	"cloud.google.com/go/auth/credentials"
 	"google.golang.org/api/option"
 )
 
 // Service provides a unified interface for all Vertex AI Example Store operations.
-type Service struct {
-	storeService   *StoreService
-	exampleService *ExampleService
-	searchService  *SearchService
+type Service interface {
+	GetProjectID() string
+	GetLocation() string
+	CreateStore(ctx context.Context, config *StoreConfig) (*Store, error)
+	ListStores(ctx context.Context, pageSize int32, pageToken string) (*ListStoresResponse, error)
+	GetStore(ctx context.Context, storeName string) (*Store, error)
+	GetStoreByID(ctx context.Context, storeID string) (*Store, error)
+	DeleteStore(ctx context.Context, storeName string, force bool) error
+	DeleteStoreByID(ctx context.Context, storeID string, force bool) error
+	UploadExamples(ctx context.Context, storeName string, examples []*Example) ([]*StoredExample, error)
+	UploadExamplesByStoreID(ctx context.Context, storeID string, examples []*Example) ([]*StoredExample, error)
+	BatchUploadExamples(ctx context.Context, storeName string, examples []*Example) ([]*StoredExample, error)
+	ListExamples(ctx context.Context, storeName string, pageSize int32, pageToken string) (*ListExamplesResponse, error)
+	ListExamplesByStoreID(ctx context.Context, storeID string, pageSize int32, pageToken string) (*ListExamplesResponse, error)
+	DeleteExample(ctx context.Context, exampleName string) error
+	BatchDeleteExamples(ctx context.Context, exampleNames []string) error
+	SearchExamples(ctx context.Context, storeName, queryText string, topK int32) ([]*SearchResult, error)
+	SearchExamplesByStoreID(ctx context.Context, storeID, queryText string, topK int32) ([]*SearchResult, error)
+	SearchExamplesAdvanced(ctx context.Context, storeName string, query *SearchQuery) ([]*SearchResult, error)
+	CreateDefaultStore(ctx context.Context, displayName, description string) (*Store, error)
+	QuickSearch(ctx context.Context, storeName, queryText string) ([]*SearchResult, error)
+	QuickSearchByStoreID(ctx context.Context, storeID, queryText string) ([]*SearchResult, error)
+	GenerateStoreName(storeID string) string
+	GenerateExampleName(storeID, exampleID string) string
+	GetStoreStats(ctx context.Context, storeName string) (*ExampleStoreStats, error)
+	GetStoreStatsByID(ctx context.Context, storeID string) (*ExampleStoreStats, error)
+	HealthCheck(ctx context.Context) error
+	GetServiceStatus() map[string]string
+	Close() error
+}
+
+type service struct {
+	storeService   *storeService
+	exampleService *exampleService
+	searchService  *searchService
 	projectID      string
 	location       string
 	logger         *slog.Logger
 	client         *aiplatform.VertexRagDataClient
 }
 
-// ServiceOption is a functional option for configuring the Example Store service.
-type ServiceOption func(*Service)
-
-// WithLogger sets the logger for the Service.
-func WithLogger(logger *slog.Logger) ServiceOption {
-	return func(s *Service) {
-		s.logger = logger
-	}
-}
+var _ Service = (*service)(nil)
 
 // NewService creates a new Vertex AI Example Store service.
 //
@@ -46,7 +68,7 @@ func WithLogger(logger *slog.Logger) ServiceOption {
 //   - opts: Optional configuration options
 //
 // Returns a fully initialized Example Store service or an error if initialization fails.
-func NewService(ctx context.Context, projectID, location string, opts ...ServiceOption) (*Service, error) {
+func NewService(ctx context.Context, projectID, location string, opts ...option.ClientOption) (*service, error) {
 	if projectID == "" {
 		return nil, fmt.Errorf("projectID is required")
 	}
@@ -57,29 +79,14 @@ func NewService(ctx context.Context, projectID, location string, opts ...Service
 		return nil, fmt.Errorf("location %s is not supported, only %s is supported", location, SupportedRegion)
 	}
 
-	service := &Service{
+	service := &service{
 		projectID: projectID,
 		location:  location,
 		logger:    slog.Default(),
 	}
 
-	// Apply options
-	for _, opt := range opts {
-		opt(service)
-	}
-
-	// Create credentials
-	creds, err := credentials.DetectDefault(&credentials.DetectOptions{
-		Scopes: []string{
-			"https://www.googleapis.com/auth/cloud-platform",
-		},
-	})
-	if err != nil {
-		return nil, fmt.Errorf("failed to detect default credentials: %w", err)
-	}
-
 	// Create Vertex RAG Data client (used for Example Store operations)
-	ragDataClient, err := aiplatform.NewVertexRagDataClient(ctx, option.WithAuthCredentials(creds))
+	ragDataClient, err := aiplatform.NewVertexRagDataClient(ctx, opts...)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create Vertex RAG data client: %w", err)
 	}
@@ -99,7 +106,7 @@ func NewService(ctx context.Context, projectID, location string, opts ...Service
 }
 
 // Close closes the Example Store service and releases any resources.
-func (s *Service) Close() error {
+func (s *service) Close() error {
 	if s.client != nil {
 		if err := s.client.Close(); err != nil {
 			s.logger.Error("Failed to close Vertex RAG data client", slog.String("error", err.Error()))
@@ -122,7 +129,7 @@ func (s *Service) Close() error {
 //   - config: Configuration for the new store
 //
 // Returns the created store or an error if creation fails.
-func (s *Service) CreateStore(ctx context.Context, config *StoreConfig) (*Store, error) {
+func (s *service) CreateStore(ctx context.Context, config *StoreConfig) (*Store, error) {
 	if err := config.Validate(); err != nil {
 		return nil, fmt.Errorf("invalid store config: %w", err)
 	}
@@ -140,7 +147,7 @@ func (s *Service) CreateStore(ctx context.Context, config *StoreConfig) (*Store,
 }
 
 // ListStores lists all Example Stores in the project and location.
-func (s *Service) ListStores(ctx context.Context, pageSize int32, pageToken string) (*ListStoresResponse, error) {
+func (s *service) ListStores(ctx context.Context, pageSize int32, pageToken string) (*ListStoresResponse, error) {
 	req := &ListStoresRequest{
 		Parent:    s.generateParentName(),
 		PageSize:  pageSize,
@@ -150,7 +157,7 @@ func (s *Service) ListStores(ctx context.Context, pageSize int32, pageToken stri
 }
 
 // GetStore retrieves a specific Example Store by name.
-func (s *Service) GetStore(ctx context.Context, storeName string) (*Store, error) {
+func (s *service) GetStore(ctx context.Context, storeName string) (*Store, error) {
 	req := &GetStoreRequest{
 		Name: storeName,
 	}
@@ -158,13 +165,13 @@ func (s *Service) GetStore(ctx context.Context, storeName string) (*Store, error
 }
 
 // GetStoreByID retrieves a specific Example Store by ID.
-func (s *Service) GetStoreByID(ctx context.Context, storeID string) (*Store, error) {
+func (s *service) GetStoreByID(ctx context.Context, storeID string) (*Store, error) {
 	storeName := s.GenerateStoreName(storeID)
 	return s.GetStore(ctx, storeName)
 }
 
 // DeleteStore deletes an Example Store and all its examples.
-func (s *Service) DeleteStore(ctx context.Context, storeName string, force bool) error {
+func (s *service) DeleteStore(ctx context.Context, storeName string, force bool) error {
 	req := &DeleteStoreRequest{
 		Name:  storeName,
 		Force: force,
@@ -173,7 +180,7 @@ func (s *Service) DeleteStore(ctx context.Context, storeName string, force bool)
 }
 
 // DeleteStoreByID deletes an Example Store by ID.
-func (s *Service) DeleteStoreByID(ctx context.Context, storeID string, force bool) error {
+func (s *service) DeleteStoreByID(ctx context.Context, storeID string, force bool) error {
 	storeName := s.GenerateStoreName(storeID)
 	return s.DeleteStore(ctx, storeName, force)
 }
@@ -191,7 +198,7 @@ func (s *Service) DeleteStoreByID(ctx context.Context, storeID string, force boo
 //   - examples: Examples to upload (max 5)
 //
 // Returns the uploaded examples or an error if upload fails.
-func (s *Service) UploadExamples(ctx context.Context, storeName string, examples []*Example) ([]*StoredExample, error) {
+func (s *service) UploadExamples(ctx context.Context, storeName string, examples []*Example) ([]*StoredExample, error) {
 	if err := ValidateExamples(examples); err != nil {
 		return nil, fmt.Errorf("invalid examples: %w", err)
 	}
@@ -210,7 +217,7 @@ func (s *Service) UploadExamples(ctx context.Context, storeName string, examples
 }
 
 // UploadExamplesByStoreID uploads examples to an Example Store by ID.
-func (s *Service) UploadExamplesByStoreID(ctx context.Context, storeID string, examples []*Example) ([]*StoredExample, error) {
+func (s *service) UploadExamplesByStoreID(ctx context.Context, storeID string, examples []*Example) ([]*StoredExample, error) {
 	storeName := s.GenerateStoreName(storeID)
 	return s.UploadExamples(ctx, storeName, examples)
 }
@@ -219,7 +226,7 @@ func (s *Service) UploadExamplesByStoreID(ctx context.Context, storeID string, e
 //
 // This method handles batching automatically, ensuring each request contains
 // at most 5 examples as required by the API.
-func (s *Service) BatchUploadExamples(ctx context.Context, storeName string, examples []*Example) ([]*StoredExample, error) {
+func (s *service) BatchUploadExamples(ctx context.Context, storeName string, examples []*Example) ([]*StoredExample, error) {
 	if len(examples) == 0 {
 		return nil, fmt.Errorf("at least one example is required")
 	}
@@ -228,10 +235,7 @@ func (s *Service) BatchUploadExamples(ctx context.Context, storeName string, exa
 	batchSize := MaxExamplesPerUpload
 
 	for i := 0; i < len(examples); i += batchSize {
-		end := i + batchSize
-		if end > len(examples) {
-			end = len(examples)
-		}
+		end := min(i+batchSize, len(examples))
 
 		batch := examples[i:end]
 		results, err := s.UploadExamples(ctx, storeName, batch)
@@ -259,7 +263,7 @@ func (s *Service) BatchUploadExamples(ctx context.Context, storeName string, exa
 }
 
 // ListExamples lists all examples in an Example Store.
-func (s *Service) ListExamples(ctx context.Context, storeName string, pageSize int32, pageToken string) (*ListExamplesResponse, error) {
+func (s *service) ListExamples(ctx context.Context, storeName string, pageSize int32, pageToken string) (*ListExamplesResponse, error) {
 	req := &ListExamplesRequest{
 		Parent:    storeName,
 		PageSize:  pageSize,
@@ -269,13 +273,13 @@ func (s *Service) ListExamples(ctx context.Context, storeName string, pageSize i
 }
 
 // ListExamplesByStoreID lists examples by store ID.
-func (s *Service) ListExamplesByStoreID(ctx context.Context, storeID string, pageSize int32, pageToken string) (*ListExamplesResponse, error) {
+func (s *service) ListExamplesByStoreID(ctx context.Context, storeID string, pageSize int32, pageToken string) (*ListExamplesResponse, error) {
 	storeName := s.GenerateStoreName(storeID)
 	return s.ListExamples(ctx, storeName, pageSize, pageToken)
 }
 
 // DeleteExample deletes a specific example from an Example Store.
-func (s *Service) DeleteExample(ctx context.Context, exampleName string) error {
+func (s *service) DeleteExample(ctx context.Context, exampleName string) error {
 	req := &DeleteExampleRequest{
 		Name: exampleName,
 	}
@@ -283,7 +287,7 @@ func (s *Service) DeleteExample(ctx context.Context, exampleName string) error {
 }
 
 // BatchDeleteExamples deletes multiple examples from an Example Store.
-func (s *Service) BatchDeleteExamples(ctx context.Context, exampleNames []string) error {
+func (s *service) BatchDeleteExamples(ctx context.Context, exampleNames []string) error {
 	req := &BatchDeleteExamplesRequest{
 		Names: exampleNames,
 	}
@@ -304,7 +308,7 @@ func (s *Service) BatchDeleteExamples(ctx context.Context, exampleNames []string
 //   - topK: Number of top results to return
 //
 // Returns search results ordered by similarity score.
-func (s *Service) SearchExamples(ctx context.Context, storeName, queryText string, topK int32) ([]*SearchResult, error) {
+func (s *service) SearchExamples(ctx context.Context, storeName, queryText string, topK int32) ([]*SearchResult, error) {
 	query := &SearchQuery{
 		Text: queryText,
 		TopK: topK,
@@ -328,13 +332,13 @@ func (s *Service) SearchExamples(ctx context.Context, storeName, queryText strin
 }
 
 // SearchExamplesByStoreID searches examples by store ID.
-func (s *Service) SearchExamplesByStoreID(ctx context.Context, storeID, queryText string, topK int32) ([]*SearchResult, error) {
+func (s *service) SearchExamplesByStoreID(ctx context.Context, storeID, queryText string, topK int32) ([]*SearchResult, error) {
 	storeName := s.GenerateStoreName(storeID)
 	return s.SearchExamples(ctx, storeName, queryText, topK)
 }
 
 // SearchExamplesAdvanced searches for examples with advanced filtering options.
-func (s *Service) SearchExamplesAdvanced(ctx context.Context, storeName string, query *SearchQuery) ([]*SearchResult, error) {
+func (s *service) SearchExamplesAdvanced(ctx context.Context, storeName string, query *SearchQuery) ([]*SearchResult, error) {
 	if err := query.Validate(); err != nil {
 		return nil, fmt.Errorf("invalid search query: %w", err)
 	}
@@ -355,7 +359,7 @@ func (s *Service) SearchExamplesAdvanced(ctx context.Context, storeName string, 
 // Convenience Methods
 
 // CreateDefaultStore creates an Example Store with default configuration.
-func (s *Service) CreateDefaultStore(ctx context.Context, displayName, description string) (*Store, error) {
+func (s *service) CreateDefaultStore(ctx context.Context, displayName, description string) (*Store, error) {
 	config := &StoreConfig{
 		EmbeddingModel: DefaultEmbeddingModel,
 		DisplayName:    displayName,
@@ -365,12 +369,12 @@ func (s *Service) CreateDefaultStore(ctx context.Context, displayName, descripti
 }
 
 // QuickSearch performs a search with default parameters.
-func (s *Service) QuickSearch(ctx context.Context, storeName, queryText string) ([]*SearchResult, error) {
+func (s *service) QuickSearch(ctx context.Context, storeName, queryText string) ([]*SearchResult, error) {
 	return s.SearchExamples(ctx, storeName, queryText, DefaultTopK)
 }
 
 // QuickSearchByStoreID performs a search by store ID with default parameters.
-func (s *Service) QuickSearchByStoreID(ctx context.Context, storeID, queryText string) ([]*SearchResult, error) {
+func (s *service) QuickSearchByStoreID(ctx context.Context, storeID, queryText string) ([]*SearchResult, error) {
 	storeName := s.GenerateStoreName(storeID)
 	return s.QuickSearch(ctx, storeName, queryText)
 }
@@ -378,50 +382,50 @@ func (s *Service) QuickSearchByStoreID(ctx context.Context, storeID, queryText s
 // Helper Methods
 
 // GenerateStoreName generates a fully qualified store name.
-func (s *Service) GenerateStoreName(storeID string) string {
+func (s *service) GenerateStoreName(storeID string) string {
 	return fmt.Sprintf("projects/%s/locations/%s/exampleStores/%s", s.projectID, s.location, storeID)
 }
 
 // GenerateExampleName generates a fully qualified example name.
-func (s *Service) GenerateExampleName(storeID, exampleID string) string {
+func (s *service) GenerateExampleName(storeID, exampleID string) string {
 	return fmt.Sprintf("projects/%s/locations/%s/exampleStores/%s/examples/%s", s.projectID, s.location, storeID, exampleID)
 }
 
 // generateParentName generates the parent resource name for stores.
-func (s *Service) generateParentName() string {
+func (s *service) generateParentName() string {
 	return fmt.Sprintf("projects/%s/locations/%s", s.projectID, s.location)
 }
 
 // GetProjectID returns the project ID.
-func (s *Service) GetProjectID() string {
+func (s *service) GetProjectID() string {
 	return s.projectID
 }
 
 // GetLocation returns the location.
-func (s *Service) GetLocation() string {
+func (s *service) GetLocation() string {
 	return s.location
 }
 
 // GetLogger returns the logger.
-func (s *Service) GetLogger() *slog.Logger {
+func (s *service) GetLogger() *slog.Logger {
 	return s.logger
 }
 
 // Statistics and Monitoring Methods
 
 // GetStoreStats retrieves statistics about an Example Store.
-func (s *Service) GetStoreStats(ctx context.Context, storeName string) (*ExampleStoreStats, error) {
+func (s *service) GetStoreStats(ctx context.Context, storeName string) (*ExampleStoreStats, error) {
 	return s.storeService.GetStoreStats(ctx, storeName)
 }
 
 // GetStoreStatsByID retrieves statistics by store ID.
-func (s *Service) GetStoreStatsByID(ctx context.Context, storeID string) (*ExampleStoreStats, error) {
+func (s *service) GetStoreStatsByID(ctx context.Context, storeID string) (*ExampleStoreStats, error) {
 	storeName := s.GenerateStoreName(storeID)
 	return s.GetStoreStats(ctx, storeName)
 }
 
 // HealthCheck performs a basic health check of the service.
-func (s *Service) HealthCheck(ctx context.Context) error {
+func (s *service) HealthCheck(ctx context.Context) error {
 	s.logger.InfoContext(ctx, "Performing Example Store service health check")
 
 	if s.client == nil {
@@ -445,7 +449,7 @@ func (s *Service) HealthCheck(ctx context.Context) error {
 }
 
 // GetServiceStatus returns the status of all sub-services.
-func (s *Service) GetServiceStatus() map[string]string {
+func (s *service) GetServiceStatus() map[string]string {
 	status := make(map[string]string)
 
 	if s.storeService != nil {

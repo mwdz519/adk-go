@@ -6,7 +6,6 @@
 package prompt
 
 import (
-	"context"
 	"fmt"
 	"os"
 	"testing"
@@ -22,7 +21,7 @@ func TestIntegration_FullWorkflow(t *testing.T) {
 		t.Skip("Skipping integration test: no Google Cloud credentials found")
 	}
 
-	ctx := context.Background()
+	ctx := t.Context()
 	projectID := os.Getenv("GCLOUD_PROJECT")
 	if projectID == "" {
 		projectID = "test-project" // fallback for local testing
@@ -188,7 +187,7 @@ func TestIntegration_BatchOperations(t *testing.T) {
 		t.Skip("Skipping integration test: no Google Cloud credentials found")
 	}
 
-	ctx := context.Background()
+	ctx := t.Context()
 	projectID := os.Getenv("GCLOUD_PROJECT")
 	if projectID == "" {
 		projectID = "test-project"
@@ -306,7 +305,7 @@ func TestIntegration_SearchAndFilter(t *testing.T) {
 		t.Skip("Skipping integration test: no Google Cloud credentials found")
 	}
 
-	ctx := context.Background()
+	ctx := t.Context()
 	projectID := os.Getenv("GCLOUD_PROJECT")
 	if projectID == "" {
 		projectID = "test-project"
@@ -420,7 +419,7 @@ func TestIntegration_Performance(t *testing.T) {
 		t.Skip("Skipping integration test: no Google Cloud credentials found")
 	}
 
-	ctx := context.Background()
+	ctx := t.Context()
 	projectID := os.Getenv("GCLOUD_PROJECT")
 	if projectID == "" {
 		projectID = "test-project"
@@ -457,7 +456,7 @@ func TestIntegration_Performance(t *testing.T) {
 		}
 
 		// Warm up
-		for i := 0; i < 10; i++ {
+		for range 10 {
 			_, err := service.ApplyTemplateSimple(ctx, prompt.ID, variables)
 			if err != nil {
 				t.Fatalf("ApplyTemplateSimple() warmup error: %v", err)
@@ -468,7 +467,7 @@ func TestIntegration_Performance(t *testing.T) {
 		iterations := 100
 		start := time.Now()
 
-		for i := 0; i < iterations; i++ {
+		for range iterations {
 			_, err := service.ApplyTemplateSimple(ctx, prompt.ID, variables)
 			if err != nil {
 				t.Fatalf("ApplyTemplateSimple() performance test error: %v", err)
@@ -497,7 +496,7 @@ func TestIntegration_ErrorHandling(t *testing.T) {
 		t.Skip("Skipping integration test: no Google Cloud credentials found")
 	}
 
-	ctx := context.Background()
+	ctx := t.Context()
 	projectID := os.Getenv("GCLOUD_PROJECT")
 	if projectID == "" {
 		projectID = "test-project"
@@ -534,8 +533,8 @@ func TestIntegration_ErrorHandling(t *testing.T) {
 
 		// Test applying template with missing variables in strict mode
 		strictProcessor := NewTemplateProcessorWithOptions(TemplateEngineSimple, ValidationModeStrict)
-		serviceWithStrict, err := NewService(ctx, projectID, "us-central1",
-			WithTemplateEngine(strictProcessor))
+		_ = strictProcessor
+		serviceWithStrict, err := NewService(ctx, projectID, "us-central1" /* WithTemplateEngine(strictProcessor) */)
 		if err != nil {
 			t.Fatalf("NewService() with strict processor unexpected error: %v", err)
 		}
@@ -560,7 +559,7 @@ func TestIntegration_Concurrency(t *testing.T) {
 		t.Skip("Skipping integration test: no Google Cloud credentials found")
 	}
 
-	ctx := context.Background()
+	ctx := t.Context()
 	projectID := os.Getenv("GCLOUD_PROJECT")
 	if projectID == "" {
 		projectID = "test-project"
@@ -594,9 +593,9 @@ func TestIntegration_Concurrency(t *testing.T) {
 
 		errChan := make(chan error, numGoroutines*opsPerGoroutine)
 
-		for i := 0; i < numGoroutines; i++ {
+		for i := range numGoroutines {
 			go func(goroutineID int) {
-				for j := 0; j < opsPerGoroutine; j++ {
+				for j := range opsPerGoroutine {
 					variables := map[string]any{
 						"name": fmt.Sprintf("User_%d_%d", goroutineID, j),
 					}

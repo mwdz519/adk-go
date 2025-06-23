@@ -15,7 +15,18 @@ import (
 )
 
 // StoreService handles Example Store management operations.
-type StoreService struct {
+type StoreService interface {
+	CreateStore(ctx context.Context, req *CreateStoreRequest) (*Store, error)
+	ListStores(ctx context.Context, req *ListStoresRequest) (*ListStoresResponse, error)
+	GetStore(ctx context.Context, req *GetStoreRequest) (*Store, error)
+	DeleteStore(ctx context.Context, req *DeleteStoreRequest) error
+	GetStoreStats(ctx context.Context, storeName string) (*ExampleStoreStats, error)
+	UpdateStore(ctx context.Context, store *Store, updateMask []string) (*Store, error)
+	WaitForStoreCreation(ctx context.Context, storeName string, timeout time.Duration) (*Store, error)
+	ListAllStores(ctx context.Context, parent string) ([]*Store, error)
+}
+
+type storeService struct {
 	client    *aiplatform.VertexRagDataClient
 	projectID string
 	location  string
@@ -23,8 +34,8 @@ type StoreService struct {
 }
 
 // NewStoreService creates a new store service.
-func NewStoreService(client *aiplatform.VertexRagDataClient, projectID, location string, logger *slog.Logger) *StoreService {
-	return &StoreService{
+func NewStoreService(client *aiplatform.VertexRagDataClient, projectID, location string, logger *slog.Logger) *storeService {
+	return &storeService{
 		client:    client,
 		projectID: projectID,
 		location:  location,
@@ -33,7 +44,7 @@ func NewStoreService(client *aiplatform.VertexRagDataClient, projectID, location
 }
 
 // CreateStore creates a new Example Store.
-func (s *StoreService) CreateStore(ctx context.Context, req *CreateStoreRequest) (*Store, error) {
+func (s *storeService) CreateStore(ctx context.Context, req *CreateStoreRequest) (*Store, error) {
 	if err := s.validateStoreRequest(req); err != nil {
 		return nil, fmt.Errorf("invalid request: %w", err)
 	}
@@ -76,7 +87,7 @@ func (s *StoreService) CreateStore(ctx context.Context, req *CreateStoreRequest)
 }
 
 // ListStores lists Example Stores in the project and location.
-func (s *StoreService) ListStores(ctx context.Context, req *ListStoresRequest) (*ListStoresResponse, error) {
+func (s *storeService) ListStores(ctx context.Context, req *ListStoresRequest) (*ListStoresResponse, error) {
 	s.logger.InfoContext(ctx, "Listing Example Stores",
 		slog.String("parent", req.Parent),
 		slog.Int("page_size", int(req.PageSize)),
@@ -100,7 +111,7 @@ func (s *StoreService) ListStores(ctx context.Context, req *ListStoresRequest) (
 }
 
 // GetStore retrieves a specific Example Store.
-func (s *StoreService) GetStore(ctx context.Context, req *GetStoreRequest) (*Store, error) {
+func (s *storeService) GetStore(ctx context.Context, req *GetStoreRequest) (*Store, error) {
 	s.logger.InfoContext(ctx, "Getting Example Store",
 		slog.String("store_name", req.Name),
 	)
@@ -135,7 +146,7 @@ func (s *StoreService) GetStore(ctx context.Context, req *GetStoreRequest) (*Sto
 }
 
 // DeleteStore deletes an Example Store.
-func (s *StoreService) DeleteStore(ctx context.Context, req *DeleteStoreRequest) error {
+func (s *storeService) DeleteStore(ctx context.Context, req *DeleteStoreRequest) error {
 	s.logger.InfoContext(ctx, "Deleting Example Store",
 		slog.String("store_name", req.Name),
 		slog.Bool("force", req.Force),
@@ -153,7 +164,7 @@ func (s *StoreService) DeleteStore(ctx context.Context, req *DeleteStoreRequest)
 }
 
 // GetStoreStats retrieves statistics about an Example Store.
-func (s *StoreService) GetStoreStats(ctx context.Context, storeName string) (*ExampleStoreStats, error) {
+func (s *storeService) GetStoreStats(ctx context.Context, storeName string) (*ExampleStoreStats, error) {
 	s.logger.InfoContext(ctx, "Getting Example Store statistics",
 		slog.String("store_name", storeName),
 	)
@@ -191,7 +202,7 @@ func generateStoreID(displayName string) string {
 
 // convertStoreToProto converts a Go Store to protobuf format.
 // TODO: Implement actual conversion when protobuf definitions are available.
-func (s *StoreService) convertStoreToProto(store *Store) *aiplatformpb.RagCorpus {
+func (s *storeService) convertStoreToProto(store *Store) *aiplatformpb.RagCorpus {
 	// This is a placeholder - actual implementation would convert to proper protobuf
 	if store == nil {
 		return nil
@@ -217,7 +228,7 @@ func (s *StoreService) convertStoreToProto(store *Store) *aiplatformpb.RagCorpus
 
 // convertProtoToStore converts protobuf format to Go Store.
 // TODO: Implement actual conversion when protobuf definitions are available.
-func (s *StoreService) convertProtoToStore(proto *aiplatformpb.RagCorpus) *Store {
+func (s *storeService) convertProtoToStore(proto *aiplatformpb.RagCorpus) *Store {
 	// This is a placeholder - actual implementation would convert from proper protobuf
 	if proto == nil {
 		return nil
@@ -244,7 +255,7 @@ func (s *StoreService) convertProtoToStore(proto *aiplatformpb.RagCorpus) *Store
 }
 
 // validateStoreRequest validates a store creation request.
-func (s *StoreService) validateStoreRequest(req *CreateStoreRequest) error {
+func (s *storeService) validateStoreRequest(req *CreateStoreRequest) error {
 	if req == nil {
 		return fmt.Errorf("request is nil")
 	}
@@ -265,7 +276,7 @@ func (s *StoreService) validateStoreRequest(req *CreateStoreRequest) error {
 }
 
 // UpdateStore updates an existing Example Store.
-func (s *StoreService) UpdateStore(ctx context.Context, store *Store, updateMask []string) (*Store, error) {
+func (s *storeService) UpdateStore(ctx context.Context, store *Store, updateMask []string) (*Store, error) {
 	s.logger.InfoContext(ctx, "Updating Example Store",
 		slog.String("store_name", store.Name),
 		slog.Any("update_mask", updateMask),
@@ -287,7 +298,7 @@ func (s *StoreService) UpdateStore(ctx context.Context, store *Store, updateMask
 }
 
 // WaitForStoreCreation waits for a store to be created (transition from CREATING to ACTIVE).
-func (s *StoreService) WaitForStoreCreation(ctx context.Context, storeName string, timeout time.Duration) (*Store, error) {
+func (s *storeService) WaitForStoreCreation(ctx context.Context, storeName string, timeout time.Duration) (*Store, error) {
 	s.logger.InfoContext(ctx, "Waiting for Example Store creation",
 		slog.String("store_name", storeName),
 		slog.Duration("timeout", timeout),
@@ -327,7 +338,7 @@ func (s *StoreService) WaitForStoreCreation(ctx context.Context, storeName strin
 }
 
 // ListAllStores lists all stores in the project, handling pagination automatically.
-func (s *StoreService) ListAllStores(ctx context.Context, parent string) ([]*Store, error) {
+func (s *storeService) ListAllStores(ctx context.Context, parent string) ([]*Store, error) {
 	s.logger.InfoContext(ctx, "Listing all Example Stores",
 		slog.String("parent", parent),
 	)

@@ -58,8 +58,8 @@ type Prompt struct {
 	Location     string `json:"location,omitempty"`
 
 	// Metadata
-	CreatedAt   time.Time         `json:"created_at,omitempty"`
-	UpdatedAt   time.Time         `json:"updated_at,omitempty"`
+	CreatedAt   time.Time         `json:"created_at,omitzero"`
+	UpdatedAt   time.Time         `json:"updated_at,omitzero"`
 	CreatedBy   string            `json:"created_by,omitempty"`
 	UpdatedBy   string            `json:"updated_by,omitempty"`
 	Metadata    map[string]any    `json:"metadata,omitempty"`
@@ -142,14 +142,14 @@ type PromptVersion struct {
 	BranchName      string `json:"branch_name,omitempty"`
 
 	// Performance metrics
-	Usage VersionUsage `json:"usage,omitempty"`
+	Usage VersionUsage `json:"usage,omitzero"`
 }
 
 // VersionUsage tracks usage statistics for a prompt version.
 type VersionUsage struct {
 	TotalCalls      int64     `json:"total_calls"`
 	UniqueUsers     int64     `json:"unique_users"`
-	LastUsed        time.Time `json:"last_used,omitempty"`
+	LastUsed        time.Time `json:"last_used,omitzero"`
 	AverageLatency  float64   `json:"average_latency"`
 	ErrorRate       float64   `json:"error_rate"`
 	TokensGenerated int64     `json:"tokens_generated"`
@@ -211,8 +211,8 @@ type ListPromptsRequest struct {
 	Category      string    `json:"category,omitempty"`
 	Tags          []string  `json:"tags,omitempty"`
 	CreatedBy     string    `json:"created_by,omitempty"`
-	CreatedAfter  time.Time `json:"created_after,omitempty"`
-	CreatedBefore time.Time `json:"created_before,omitempty"`
+	CreatedAfter  time.Time `json:"created_after,omitzero"`
+	CreatedBefore time.Time `json:"created_before,omitzero"`
 	IsPublic      *bool     `json:"is_public,omitempty"`
 
 	// Search
@@ -293,8 +293,8 @@ type ListVersionsRequest struct {
 	PageSize      int32     `json:"page_size,omitempty"`
 	PageToken     string    `json:"page_token,omitempty"`
 	IncludeUsage  bool      `json:"include_usage,omitempty"`
-	CreatedAfter  time.Time `json:"created_after,omitempty"`
-	CreatedBefore time.Time `json:"created_before,omitempty"`
+	CreatedAfter  time.Time `json:"created_after,omitzero"`
+	CreatedBefore time.Time `json:"created_before,omitzero"`
 	BranchName    string    `json:"branch_name,omitempty"`
 }
 
@@ -375,8 +375,8 @@ type SearchPromptsRequest struct {
 	Category      string    `json:"category,omitempty"`
 	Tags          []string  `json:"tags,omitempty"`
 	CreatedBy     string    `json:"created_by,omitempty"`
-	CreatedAfter  time.Time `json:"created_after,omitempty"`
-	CreatedBefore time.Time `json:"created_before,omitempty"`
+	CreatedAfter  time.Time `json:"created_after,omitzero"`
+	CreatedBefore time.Time `json:"created_before,omitzero"`
 	IsPublic      *bool     `json:"is_public,omitempty"`
 
 	// Search options
@@ -422,7 +422,7 @@ type PromptMetrics struct {
 	PromptID        string    `json:"prompt_id"`
 	TotalCalls      int64     `json:"total_calls"`
 	UniqueUsers     int64     `json:"unique_users"`
-	LastUsed        time.Time `json:"last_used,omitempty"`
+	LastUsed        time.Time `json:"last_used,omitzero"`
 	AverageLatency  float64   `json:"average_latency"`
 	ErrorRate       float64   `json:"error_rate"`
 	TokensGenerated int64     `json:"tokens_generated"`

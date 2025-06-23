@@ -14,17 +14,28 @@ import (
 	aiplatform "cloud.google.com/go/aiplatform/apiv1beta1"
 )
 
-// SearchService handles search and retrieval operations for Example Stores.
-type SearchService struct {
+// searchService handles search and retrieval operations for Example Stores.
+type SearchService interface {
+	SearchExamples(ctx context.Context, req *SearchExamplesRequest) (*SearchResponse, error)
+	SearchSimilarExamples(ctx context.Context, storeName string, example *Example, topK int32) ([]*SearchResult, error)
+	SearchWithFilters(ctx context.Context, storeName, queryText string, topK int32, filters map[string]any) ([]*SearchResult, error)
+	GetRelevantExamples(ctx context.Context, storeName, queryText string, topK int32, minSimilarity float64) ([]*SearchResult, error)
+	SearchByCategory(ctx context.Context, storeName, queryText, category string, topK int32) ([]*SearchResult, error)
+	SearchByDifficulty(ctx context.Context, storeName, queryText, difficulty string, topK int32) ([]*SearchResult, error)
+}
+
+type searchService struct {
 	client    *aiplatform.VertexRagDataClient
 	projectID string
 	location  string
 	logger    *slog.Logger
 }
 
+var _ SearchService = (*searchService)(nil)
+
 // NewSearchService creates a new search service.
-func NewSearchService(client *aiplatform.VertexRagDataClient, projectID, location string, logger *slog.Logger) *SearchService {
-	return &SearchService{
+func NewSearchService(client *aiplatform.VertexRagDataClient, projectID, location string, logger *slog.Logger) *searchService {
+	return &searchService{
 		client:    client,
 		projectID: projectID,
 		location:  location,
@@ -33,7 +44,7 @@ func NewSearchService(client *aiplatform.VertexRagDataClient, projectID, locatio
 }
 
 // SearchExamples searches for relevant examples in an Example Store.
-func (s *SearchService) SearchExamples(ctx context.Context, req *SearchExamplesRequest) (*SearchResponse, error) {
+func (s *searchService) SearchExamples(ctx context.Context, req *SearchExamplesRequest) (*SearchResponse, error) {
 	s.logger.InfoContext(ctx, "Searching examples",
 		slog.String("store", req.Parent),
 		slog.String("query", req.Query.Text),
@@ -72,7 +83,7 @@ func (s *SearchService) SearchExamples(ctx context.Context, req *SearchExamplesR
 
 // performMockSearch performs a mock search for demonstration purposes.
 // TODO: Replace with actual vector similarity search.
-func (s *SearchService) performMockSearch(ctx context.Context, req *SearchExamplesRequest) ([]*SearchResult, error) {
+func (s *searchService) performMockSearch(ctx context.Context, req *SearchExamplesRequest) ([]*SearchResult, error) {
 	// For demonstration, create some mock examples and perform basic text similarity
 	mockExamples := s.generateMockExamples(req.Parent)
 
@@ -110,7 +121,7 @@ func (s *SearchService) performMockSearch(ctx context.Context, req *SearchExampl
 
 // calculateTextSimilarity calculates a simple text similarity score.
 // TODO: Replace with actual vector similarity calculation.
-func (s *SearchService) calculateTextSimilarity(queryWords []string, example *StoredExample) float64 {
+func (s *searchService) calculateTextSimilarity(queryWords []string, example *StoredExample) float64 {
 	if example.Input == nil {
 		return 0.0
 	}
@@ -147,7 +158,7 @@ func (s *SearchService) calculateTextSimilarity(queryWords []string, example *St
 }
 
 // generateMockExamples generates mock examples for testing search functionality.
-func (s *SearchService) generateMockExamples(storeName string) []*StoredExample {
+func (s *searchService) generateMockExamples(storeName string) []*StoredExample {
 	examples := []*StoredExample{
 		{
 			Name:        storeName + "/examples/example-1",
@@ -225,7 +236,7 @@ func (s *SearchService) generateMockExamples(storeName string) []*StoredExample 
 }
 
 // SearchSimilarExamples searches for examples similar to a given example.
-func (s *SearchService) SearchSimilarExamples(ctx context.Context, storeName string, example *Example, topK int32) ([]*SearchResult, error) {
+func (s *searchService) SearchSimilarExamples(ctx context.Context, storeName string, example *Example, topK int32) ([]*SearchResult, error) {
 	s.logger.InfoContext(ctx, "Searching for similar examples",
 		slog.String("store", storeName),
 		slog.String("reference_input", example.Input.Text),
@@ -252,7 +263,7 @@ func (s *SearchService) SearchSimilarExamples(ctx context.Context, storeName str
 }
 
 // SearchWithFilters searches for examples with metadata filters.
-func (s *SearchService) SearchWithFilters(ctx context.Context, storeName, queryText string, topK int32, filters map[string]any) ([]*SearchResult, error) {
+func (s *searchService) SearchWithFilters(ctx context.Context, storeName, queryText string, topK int32, filters map[string]any) ([]*SearchResult, error) {
 	s.logger.InfoContext(ctx, "Searching examples with filters",
 		slog.String("store", storeName),
 		slog.String("query", queryText),
@@ -291,7 +302,7 @@ func (s *SearchService) SearchWithFilters(ctx context.Context, storeName, queryT
 }
 
 // applyMetadataFilters applies metadata filters to search results.
-func (s *SearchService) applyMetadataFilters(results []*SearchResult, filters map[string]any) []*SearchResult {
+func (s *searchService) applyMetadataFilters(results []*SearchResult, filters map[string]any) []*SearchResult {
 	if len(filters) == 0 {
 		return results
 	}
@@ -308,7 +319,7 @@ func (s *SearchService) applyMetadataFilters(results []*SearchResult, filters ma
 }
 
 // matchesFilters checks if an example matches the given metadata filters.
-func (s *SearchService) matchesFilters(example *StoredExample, filters map[string]any) bool {
+func (s *searchService) matchesFilters(example *StoredExample, filters map[string]any) bool {
 	for key, expectedValue := range filters {
 		// Check example metadata
 		if value, exists := example.Metadata[key]; exists {
@@ -346,14 +357,14 @@ func (s *SearchService) matchesFilters(example *StoredExample, filters map[strin
 }
 
 // valuesMatch checks if two values match (with type conversion).
-func (s *SearchService) valuesMatch(actual, expected any) bool {
+func (s *searchService) valuesMatch(actual, expected any) bool {
 	// Simple equality check - in a real implementation, you might want
 	// more sophisticated matching (e.g., range queries, regex, etc.)
 	return fmt.Sprintf("%v", actual) == fmt.Sprintf("%v", expected)
 }
 
 // GetRelevantExamples retrieves examples most relevant to a query with smart ranking.
-func (s *SearchService) GetRelevantExamples(ctx context.Context, storeName, queryText string, topK int32, minSimilarity float64) ([]*SearchResult, error) {
+func (s *searchService) GetRelevantExamples(ctx context.Context, storeName, queryText string, topK int32, minSimilarity float64) ([]*SearchResult, error) {
 	s.logger.InfoContext(ctx, "Getting relevant examples with smart ranking",
 		slog.String("store", storeName),
 		slog.String("query", queryText),
@@ -394,7 +405,7 @@ func (s *SearchService) GetRelevantExamples(ctx context.Context, storeName, quer
 }
 
 // applySmartRanking applies smart ranking to search results.
-func (s *SearchService) applySmartRanking(results []*SearchResult, queryText string) []*SearchResult {
+func (s *searchService) applySmartRanking(results []*SearchResult, queryText string) []*SearchResult {
 	// Apply additional ranking factors beyond similarity score
 	for _, result := range results {
 		// Example quality score based on metadata
@@ -419,7 +430,7 @@ func (s *SearchService) applySmartRanking(results []*SearchResult, queryText str
 }
 
 // calculateQualityScore calculates a quality score for an example.
-func (s *SearchService) calculateQualityScore(example *StoredExample) float64 {
+func (s *searchService) calculateQualityScore(example *StoredExample) float64 {
 	score := 0.5 // Base score
 
 	// Higher score for examples with metadata
@@ -445,8 +456,8 @@ func (s *SearchService) calculateQualityScore(example *StoredExample) float64 {
 }
 
 // calculateRecencyScore calculates a recency score for an example.
-func (s *SearchService) calculateRecencyScore(example *StoredExample) float64 {
-	if example.CreateTime == nil {
+func (s *searchService) calculateRecencyScore(example *StoredExample) float64 {
+	if example.CreateTime.IsZero() {
 		return 0.5 // Default score if no timestamp
 	}
 
@@ -459,7 +470,7 @@ func (s *SearchService) calculateRecencyScore(example *StoredExample) float64 {
 }
 
 // SearchByCategory searches for examples in specific categories.
-func (s *SearchService) SearchByCategory(ctx context.Context, storeName, queryText, category string, topK int32) ([]*SearchResult, error) {
+func (s *searchService) SearchByCategory(ctx context.Context, storeName, queryText, category string, topK int32) ([]*SearchResult, error) {
 	filters := map[string]any{
 		"category": category,
 	}
@@ -468,7 +479,7 @@ func (s *SearchService) SearchByCategory(ctx context.Context, storeName, queryTe
 }
 
 // SearchByDifficulty searches for examples with specific difficulty levels.
-func (s *SearchService) SearchByDifficulty(ctx context.Context, storeName, queryText, difficulty string, topK int32) ([]*SearchResult, error) {
+func (s *searchService) SearchByDifficulty(ctx context.Context, storeName, queryText, difficulty string, topK int32) ([]*SearchResult, error) {
 	filters := map[string]any{
 		"difficulty": difficulty,
 	}

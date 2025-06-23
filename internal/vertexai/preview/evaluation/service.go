@@ -15,7 +15,6 @@ import (
 	"time"
 
 	aiplatform "cloud.google.com/go/aiplatform/apiv1beta1"
-	"cloud.google.com/go/auth/credentials"
 	"google.golang.org/api/option"
 )
 
@@ -24,7 +23,13 @@ import (
 // The service manages evaluation tasks, computes metrics, and tracks experiments.
 // It supports both computation-based metrics (BLEU, ROUGE) and model-based metrics
 // (coherence, fluency, safety) for comprehensive evaluation of generative AI models.
-type Service struct {
+type Service interface {
+	Evaluate(ctx context.Context, task *EvalTask, runName string) (*EvaluationResult, error)
+	BatchEvaluate(ctx context.Context, task *EvalTask, configs []ModelConfig) (*BatchEvaluationResult, error)
+	Close() error
+}
+
+type service struct {
 	client    *aiplatform.PredictionClient
 	projectID string
 	location  string
@@ -35,15 +40,7 @@ type Service struct {
 	mu sync.RWMutex
 }
 
-// ServiceOption is a functional option for configuring the evaluation service.
-type ServiceOption func(*Service)
-
-// WithLogger sets a custom logger for the service.
-func WithLogger(logger *slog.Logger) ServiceOption {
-	return func(s *Service) {
-		s.logger = logger
-	}
-}
+var _ Service = (*service)(nil)
 
 // NewService creates a new evaluation service.
 //
@@ -57,7 +54,7 @@ func WithLogger(logger *slog.Logger) ServiceOption {
 //   - opts: Optional configuration options
 //
 // Returns a fully initialized evaluation service or an error if initialization fails.
-func NewService(ctx context.Context, projectID, location string, opts ...ServiceOption) (*Service, error) {
+func NewService(ctx context.Context, projectID, location string, opts ...option.ClientOption) (*service, error) {
 	if projectID == "" {
 		return nil, fmt.Errorf("projectID is required")
 	}
@@ -65,29 +62,14 @@ func NewService(ctx context.Context, projectID, location string, opts ...Service
 		return nil, fmt.Errorf("location is required")
 	}
 
-	service := &Service{
+	service := &service{
 		projectID: projectID,
 		location:  location,
 		logger:    slog.Default(),
 	}
 
-	// Apply options
-	for _, opt := range opts {
-		opt(service)
-	}
-
-	// Create credentials
-	creds, err := credentials.DetectDefault(&credentials.DetectOptions{
-		Scopes: []string{
-			"https://www.googleapis.com/auth/cloud-platform",
-		},
-	})
-	if err != nil {
-		return nil, fmt.Errorf("failed to detect credentials: %w", err)
-	}
-
 	// Create AI Platform client
-	client, err := aiplatform.NewPredictionClient(ctx, option.WithAuthCredentials(creds))
+	client, err := aiplatform.NewPredictionClient(ctx, opts...)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create prediction client: %w", err)
 	}
@@ -102,7 +84,7 @@ func NewService(ctx context.Context, projectID, location string, opts ...Service
 }
 
 // Close closes the evaluation service and releases all resources.
-func (s *Service) Close() error {
+func (s *service) Close() error {
 	s.logger.Info("Closing evaluation service")
 
 	if s.client != nil {
@@ -127,7 +109,7 @@ func (s *Service) Close() error {
 //   - runName: Optional experiment run name for tracking
 //
 // Returns evaluation results or an error if evaluation fails.
-func (s *Service) Evaluate(ctx context.Context, task *EvalTask, runName string) (*EvaluationResult, error) {
+func (s *service) Evaluate(ctx context.Context, task *EvalTask, runName string) (*EvaluationResult, error) {
 	startTime := time.Now()
 
 	s.logger.InfoContext(ctx, "Starting evaluation",
@@ -197,7 +179,7 @@ func (s *Service) Evaluate(ctx context.Context, task *EvalTask, runName string) 
 //   - configs: Model configurations to evaluate
 //
 // Returns batch evaluation results with comparison analysis.
-func (s *Service) BatchEvaluate(ctx context.Context, task *EvalTask, configs []ModelConfig) (*BatchEvaluationResult, error) {
+func (s *service) BatchEvaluate(ctx context.Context, task *EvalTask, configs []ModelConfig) (*BatchEvaluationResult, error) {
 	startTime := time.Now()
 
 	s.logger.InfoContext(ctx, "Starting batch evaluation",
@@ -248,7 +230,7 @@ func (s *Service) BatchEvaluate(ctx context.Context, task *EvalTask, configs []M
 }
 
 // validateTask validates the evaluation task configuration.
-func (s *Service) validateTask(task *EvalTask) error {
+func (s *service) validateTask(task *EvalTask) error {
 	if task.Dataset == nil {
 		return fmt.Errorf("dataset is required")
 	}
@@ -274,7 +256,7 @@ func (s *Service) validateTask(task *EvalTask) error {
 }
 
 // isComputationBasedMetric checks if a metric is computation-based.
-func (s *Service) isComputationBasedMetric(metricType MetricType) bool {
+func (s *service) isComputationBasedMetric(metricType MetricType) bool {
 	computationMetrics := map[MetricType]bool{
 		MetricTypeBLEU:       true,
 		MetricTypeROUGE1:     true,
@@ -288,7 +270,7 @@ func (s *Service) isComputationBasedMetric(metricType MetricType) bool {
 }
 
 // validateComputationMetric validates computation-based metrics.
-func (s *Service) validateComputationMetric(dataset *Dataset, metric MetricConfig) error {
+func (s *service) validateComputationMetric(dataset *Dataset, metric MetricConfig) error {
 	for i, record := range dataset.Data {
 		switch metric.Type {
 		case MetricTypeBLEU, MetricTypeROUGE1, MetricTypeROUGE2, MetricTypeROUGEL, MetricTypeROUGELSum, MetricTypeExactMatch:
@@ -308,7 +290,7 @@ func (s *Service) validateComputationMetric(dataset *Dataset, metric MetricConfi
 }
 
 // evaluateMetricsSequential evaluates metrics one by one.
-func (s *Service) evaluateMetricsSequential(ctx context.Context, task *EvalTask, result *EvaluationResult) error {
+func (s *service) evaluateMetricsSequential(ctx context.Context, task *EvalTask, result *EvaluationResult) error {
 	// Evaluate built-in metrics
 	for _, metric := range task.Metrics {
 		metricResult, err := s.evaluateMetric(ctx, task.Dataset, metric)
@@ -356,7 +338,7 @@ func (s *Service) evaluateMetricsSequential(ctx context.Context, task *EvalTask,
 }
 
 // evaluateMetricsParallel evaluates metrics in parallel.
-func (s *Service) evaluateMetricsParallel(ctx context.Context, task *EvalTask, result *EvaluationResult) error {
+func (s *service) evaluateMetricsParallel(ctx context.Context, task *EvalTask, result *EvaluationResult) error {
 	maxConcurrency := task.MaxConcurrency
 	if maxConcurrency <= 0 {
 		maxConcurrency = 5 // Default concurrency
@@ -437,7 +419,7 @@ func (s *Service) evaluateMetricsParallel(ctx context.Context, task *EvalTask, r
 }
 
 // evaluateMetric evaluates a single built-in metric.
-func (s *Service) evaluateMetric(ctx context.Context, dataset *Dataset, metric MetricConfig) (*MetricResult, error) {
+func (s *service) evaluateMetric(ctx context.Context, dataset *Dataset, metric MetricConfig) (*MetricResult, error) {
 	startTime := time.Now()
 
 	metricResult := &MetricResult{
@@ -469,7 +451,7 @@ func (s *Service) evaluateMetric(ctx context.Context, dataset *Dataset, metric M
 }
 
 // evaluateBLEU computes BLEU scores.
-func (s *Service) evaluateBLEU(ctx context.Context, dataset *Dataset, metric MetricConfig) (*MetricResult, error) {
+func (s *service) evaluateBLEU(ctx context.Context, dataset *Dataset, metric MetricConfig) (*MetricResult, error) {
 	startTime := time.Now()
 
 	metricResult := &MetricResult{
@@ -511,7 +493,7 @@ func (s *Service) evaluateBLEU(ctx context.Context, dataset *Dataset, metric Met
 // computeBLEUScore computes a simple BLEU-like score.
 // Note: This is a simplified implementation. A production version would use
 // proper BLEU computation with n-gram precision and brevity penalty.
-func (s *Service) computeBLEUScore(candidate, reference string) float64 {
+func (s *service) computeBLEUScore(candidate, reference string) float64 {
 	candWords := strings.Fields(strings.ToLower(candidate))
 	refWords := strings.Fields(strings.ToLower(reference))
 
@@ -544,7 +526,7 @@ func (s *Service) computeBLEUScore(candidate, reference string) float64 {
 }
 
 // evaluateROUGE computes ROUGE scores.
-func (s *Service) evaluateROUGE(ctx context.Context, dataset *Dataset, metric MetricConfig) (*MetricResult, error) {
+func (s *service) evaluateROUGE(ctx context.Context, dataset *Dataset, metric MetricConfig) (*MetricResult, error) {
 	startTime := time.Now()
 
 	metricResult := &MetricResult{
@@ -595,7 +577,7 @@ func (s *Service) evaluateROUGE(ctx context.Context, dataset *Dataset, metric Me
 }
 
 // computeROUGE1 computes ROUGE-1 score (unigram overlap).
-func (s *Service) computeROUGE1(candidate, reference string) float64 {
+func (s *service) computeROUGE1(candidate, reference string) float64 {
 	candWords := strings.Fields(strings.ToLower(candidate))
 	refWords := strings.Fields(strings.ToLower(reference))
 
@@ -628,7 +610,7 @@ func (s *Service) computeROUGE1(candidate, reference string) float64 {
 }
 
 // computeROUGE2 computes ROUGE-2 score (bigram overlap).
-func (s *Service) computeROUGE2(candidate, reference string) float64 {
+func (s *service) computeROUGE2(candidate, reference string) float64 {
 	candBigrams := s.getBigrams(candidate)
 	refBigrams := s.getBigrams(reference)
 
@@ -661,7 +643,7 @@ func (s *Service) computeROUGE2(candidate, reference string) float64 {
 }
 
 // getBigrams extracts bigrams from text.
-func (s *Service) getBigrams(text string) []string {
+func (s *service) getBigrams(text string) []string {
 	words := strings.Fields(strings.ToLower(text))
 	if len(words) < 2 {
 		return []string{}
@@ -675,7 +657,7 @@ func (s *Service) getBigrams(text string) []string {
 }
 
 // computeROUGEL computes ROUGE-L score (longest common subsequence).
-func (s *Service) computeROUGEL(candidate, reference string) float64 {
+func (s *service) computeROUGEL(candidate, reference string) float64 {
 	candWords := strings.Fields(strings.ToLower(candidate))
 	refWords := strings.Fields(strings.ToLower(reference))
 
@@ -696,14 +678,14 @@ func (s *Service) computeROUGEL(candidate, reference string) float64 {
 }
 
 // computeROUGELSum computes ROUGE-L sum score.
-func (s *Service) computeROUGELSum(candidate, reference string) float64 {
+func (s *service) computeROUGELSum(candidate, reference string) float64 {
 	// For simplicity, using ROUGE-L computation
 	// In practice, ROUGE-L-Sum handles sentence-level LCS
 	return s.computeROUGEL(candidate, reference)
 }
 
 // longestCommonSubsequence computes the length of the longest common subsequence.
-func (s *Service) longestCommonSubsequence(seq1, seq2 []string) int {
+func (s *service) longestCommonSubsequence(seq1, seq2 []string) int {
 	m, n := len(seq1), len(seq2)
 	dp := make([][]int, m+1)
 	for i := range dp {
@@ -715,11 +697,7 @@ func (s *Service) longestCommonSubsequence(seq1, seq2 []string) int {
 			if seq1[i-1] == seq2[j-1] {
 				dp[i][j] = dp[i-1][j-1] + 1
 			} else {
-				if dp[i-1][j] > dp[i][j-1] {
-					dp[i][j] = dp[i-1][j]
-				} else {
-					dp[i][j] = dp[i][j-1]
-				}
+				dp[i][j] = max(dp[i-1][j], dp[i][j-1])
 			}
 		}
 	}
@@ -728,7 +706,7 @@ func (s *Service) longestCommonSubsequence(seq1, seq2 []string) int {
 }
 
 // evaluateExactMatch computes exact match scores.
-func (s *Service) evaluateExactMatch(ctx context.Context, dataset *Dataset, metric MetricConfig) (*MetricResult, error) {
+func (s *service) evaluateExactMatch(ctx context.Context, dataset *Dataset, metric MetricConfig) (*MetricResult, error) {
 	startTime := time.Now()
 
 	metricResult := &MetricResult{
@@ -761,7 +739,7 @@ func (s *Service) evaluateExactMatch(ctx context.Context, dataset *Dataset, metr
 }
 
 // evaluateToolCall evaluates tool calling quality.
-func (s *Service) evaluateToolCall(ctx context.Context, dataset *Dataset, metric MetricConfig) (*MetricResult, error) {
+func (s *service) evaluateToolCall(ctx context.Context, dataset *Dataset, metric MetricConfig) (*MetricResult, error) {
 	startTime := time.Now()
 
 	metricResult := &MetricResult{
@@ -791,7 +769,7 @@ func (s *Service) evaluateToolCall(ctx context.Context, dataset *Dataset, metric
 }
 
 // computeToolCallScore computes tool call accuracy.
-func (s *Service) computeToolCallScore(actual, expected []ToolCall) float64 {
+func (s *service) computeToolCallScore(actual, expected []ToolCall) float64 {
 	if len(expected) == 0 {
 		if len(actual) == 0 {
 			return 1.0
@@ -817,7 +795,7 @@ func (s *Service) computeToolCallScore(actual, expected []ToolCall) float64 {
 }
 
 // compareArguments compares tool call arguments.
-func (s *Service) compareArguments(expected, actual map[string]any) bool {
+func (s *service) compareArguments(expected, actual map[string]any) bool {
 	if len(expected) != len(actual) {
 		return false
 	}
@@ -832,7 +810,7 @@ func (s *Service) compareArguments(expected, actual map[string]any) bool {
 }
 
 // evaluateModelBasedMetric evaluates metrics using language models.
-func (s *Service) evaluateModelBasedMetric(ctx context.Context, dataset *Dataset, metric MetricConfig) (*MetricResult, error) {
+func (s *service) evaluateModelBasedMetric(ctx context.Context, dataset *Dataset, metric MetricConfig) (*MetricResult, error) {
 	startTime := time.Now()
 
 	// Get appropriate template
@@ -889,7 +867,7 @@ func (s *Service) evaluateModelBasedMetric(ctx context.Context, dataset *Dataset
 }
 
 // getTemplateForMetric returns the appropriate template for a metric.
-func (s *Service) getTemplateForMetric(metricType MetricType) *PromptTemplate {
+func (s *service) getTemplateForMetric(metricType MetricType) *PromptTemplate {
 	switch metricType {
 	case MetricTypeCoherence:
 		return PromptTemplates.Pointwise.Coherence
@@ -915,7 +893,7 @@ func (s *Service) getTemplateForMetric(metricType MetricType) *PromptTemplate {
 }
 
 // formatPromptTemplate formats a template with record data.
-func (s *Service) formatPromptTemplate(template string, record DataRecord) string {
+func (s *service) formatPromptTemplate(template string, record DataRecord) string {
 	// Simple template replacement - in practice, you'd use a proper template engine
 	result := template
 	result = strings.ReplaceAll(result, "{{.Input}}", record.Input)
@@ -927,7 +905,7 @@ func (s *Service) formatPromptTemplate(template string, record DataRecord) strin
 }
 
 // evaluateWithModel evaluates using a generative model.
-func (s *Service) evaluateWithModel(ctx context.Context, prompt, modelName string) (float64, string, error) {
+func (s *service) evaluateWithModel(ctx context.Context, prompt, modelName string) (float64, string, error) {
 	// This is a placeholder implementation
 	// In practice, you would:
 	// 1. Get or create a model client
@@ -939,7 +917,7 @@ func (s *Service) evaluateWithModel(ctx context.Context, prompt, modelName strin
 }
 
 // evaluateCustomMetric evaluates a custom metric.
-func (s *Service) evaluateCustomMetric(ctx context.Context, dataset *Dataset, customMetric *CustomMetric, config MetricConfig) (*MetricResult, error) {
+func (s *service) evaluateCustomMetric(ctx context.Context, dataset *Dataset, customMetric *CustomMetric, config MetricConfig) (*MetricResult, error) {
 	startTime := time.Now()
 
 	metricResult := &MetricResult{
@@ -989,7 +967,7 @@ func (s *Service) evaluateCustomMetric(ctx context.Context, dataset *Dataset, cu
 }
 
 // calculateOverallScore calculates the overall score across all metrics.
-func (s *Service) calculateOverallScore(task *EvalTask, results []MetricResult) float64 {
+func (s *service) calculateOverallScore(task *EvalTask, results []MetricResult) float64 {
 	var weightedSum float64
 	var totalWeight float64
 
@@ -1016,7 +994,7 @@ func (s *Service) calculateOverallScore(task *EvalTask, results []MetricResult) 
 }
 
 // generateSummary generates a text summary of evaluation results.
-func (s *Service) generateSummary(result *EvaluationResult) string {
+func (s *service) generateSummary(result *EvaluationResult) string {
 	var summary strings.Builder
 
 	summary.WriteString(fmt.Sprintf("Evaluation completed with overall score: %.3f\n", result.OverallScore))
@@ -1036,7 +1014,7 @@ func (s *Service) generateSummary(result *EvaluationResult) string {
 }
 
 // generateComparison generates comparison analysis for batch evaluation.
-func (s *Service) generateComparison(results []EvaluationResult) *ComparisonResult {
+func (s *service) generateComparison(results []EvaluationResult) *ComparisonResult {
 	if len(results) == 0 {
 		return nil
 	}
@@ -1100,7 +1078,7 @@ func (s *Service) generateComparison(results []EvaluationResult) *ComparisonResu
 }
 
 // parseModelResponse parses a model response to extract score and explanation.
-func (s *Service) parseModelResponse(response string) (float64, string, error) {
+func (s *service) parseModelResponse(response string) (float64, string, error) {
 	// Look for "Rating: X" pattern
 	re := regexp.MustCompile(`(?i)rating:\s*(\d+(?:\.\d+)?)`)
 	matches := re.FindStringSubmatch(response)

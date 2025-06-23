@@ -55,13 +55,13 @@ type CachedContent struct {
 	ToolConfig *genai.ToolConfig `json:"tool_config,omitempty"`
 
 	// CreateTime is the timestamp when the cached content was created.
-	CreateTime time.Time `json:"create_time,omitempty"`
+	CreateTime time.Time `json:"create_time,omitzero"`
 
 	// UpdateTime is the timestamp when the cached content was last updated.
-	UpdateTime time.Time `json:"update_time,omitempty"`
+	UpdateTime time.Time `json:"update_time,omitzero"`
 
 	// ExpireTime is the timestamp when the cached content will expire.
-	ExpireTime time.Time `json:"expire_time,omitempty"`
+	ExpireTime time.Time `json:"expire_time,omitzero"`
 
 	// State is the current state of the cached content.
 	State CacheState `json:"state,omitempty"`

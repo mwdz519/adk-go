@@ -4,8 +4,6 @@
 package generativemodel
 
 import (
-	"context"
-	"iter"
 	"time"
 
 	"google.golang.org/genai"
@@ -277,10 +275,10 @@ type ToolCallMetadata struct {
 	CallID string `json:"call_id,omitempty"`
 
 	// StartTime is when the tool call started.
-	StartTime time.Time `json:"start_time,omitempty"`
+	StartTime time.Time `json:"start_time,omitzero"`
 
 	// EndTime is when the tool call completed.
-	EndTime time.Time `json:"end_time,omitempty"`
+	EndTime time.Time `json:"end_time,omitzero"`
 
 	// Success indicates whether the tool call was successful.
 	Success bool `json:"success,omitempty"`
@@ -311,22 +309,4 @@ type StreamingConfig struct {
 
 	// EnablePartialResults enables streaming of partial results.
 	EnablePartialResults bool `json:"enable_partial_results,omitempty"`
-}
-
-// PreviewGenerativeModelService defines the interface for preview generative model operations.
-type PreviewGenerativeModelService interface {
-	// GenerateContentWithPreview generates content with preview features.
-	GenerateContentWithPreview(ctx context.Context, modelName string, req *PreviewGenerateRequest) (*PreviewGenerateResponse, error)
-
-	// GenerateContentStreamWithPreview generates content with streaming and preview features.
-	GenerateContentStreamWithPreview(ctx context.Context, modelName string, req *PreviewGenerateRequest) iter.Seq2[*PreviewGenerateResponse, error]
-
-	// GenerateContentWithTools generates content with enhanced tool calling.
-	GenerateContentWithTools(ctx context.Context, modelName string, req *ToolGenerateRequest) (*ToolGenerateResponse, error)
-
-	// CountTokensPreview counts tokens with preview features.
-	CountTokensPreview(ctx context.Context, req *TokenCountRequest) (*TokenCountResponse, error)
-
-	// Close closes the service and releases resources.
-	Close() error
 }

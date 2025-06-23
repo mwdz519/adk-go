@@ -9,7 +9,6 @@ import (
 	"log/slog"
 
 	aiplatform "cloud.google.com/go/aiplatform/apiv1beta1"
-	"cloud.google.com/go/auth/credentials"
 	"google.golang.org/api/option"
 	"google.golang.org/protobuf/types/known/fieldmaskpb"
 )
@@ -24,47 +23,22 @@ type Service struct {
 	logger           *slog.Logger
 }
 
-// ServiceOption is a functional option for configuring the RAG service.
-type ServiceOption func(*Service)
-
-// WithLogger sets the logger for the Client.
-func WithLogger(logger *slog.Logger) ServiceOption {
-	return func(c *Service) {
-		c.logger = logger
-	}
-}
-
 // NewService creates a new Vertex AI RAG client.
-func NewService(ctx context.Context, projectID, location string, opts ...ServiceOption) (*Service, error) {
+func NewService(ctx context.Context, projectID, location string, opts ...option.ClientOption) (*Service, error) {
 	client := &Service{
 		projectID: projectID,
 		location:  location,
 		logger:    slog.Default(),
 	}
 
-	// Apply options
-	for _, opt := range opts {
-		opt(client)
-	}
-
-	// Create credentials
-	creds, err := credentials.DetectDefault(&credentials.DetectOptions{
-		Scopes: []string{
-			"https://www.googleapis.com/auth/cloud-platform",
-		},
-	})
-	if err != nil {
-		return nil, fmt.Errorf("failed to detect default credentials: %w", err)
-	}
-
 	// Create RAG client
-	ragClient, err := aiplatform.NewVertexRagClient(ctx, option.WithAuthCredentials(creds))
+	ragClient, err := aiplatform.NewVertexRagClient(ctx, opts...)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create Vertex RAG client: %w", err)
 	}
 
 	// Create RAG data client
-	ragDataClient, err := aiplatform.NewVertexRagDataClient(ctx, option.WithAuthCredentials(creds))
+	ragDataClient, err := aiplatform.NewVertexRagDataClient(ctx, opts...)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create Vertex RAG data client: %w", err)
 	}

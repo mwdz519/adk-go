@@ -4,7 +4,6 @@
 package prompt
 
 import (
-	"context"
 	"testing"
 	"time"
 
@@ -12,7 +11,7 @@ import (
 )
 
 func TestNewService(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 
 	tests := []struct {
 		name      string
@@ -87,11 +86,11 @@ func TestNewService(t *testing.T) {
 }
 
 func TestServiceWithOptions(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 
 	// Test with custom cache expiry
 	cacheExpiry := 10 * time.Minute
-	service, err := NewService(ctx, "test-project", "us-central1", WithCacheExpiry(cacheExpiry))
+	service, err := NewService(ctx, "test-project", "us-central1" /* , WithCacheExpiry(cacheExpiry) */)
 	if err != nil {
 		t.Fatalf("NewService() unexpected error: %v", err)
 	}
@@ -103,7 +102,7 @@ func TestServiceWithOptions(t *testing.T) {
 }
 
 func TestCreatePrompt(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	service, err := NewService(ctx, "test-project", "us-central1")
 	if err != nil {
 		t.Fatalf("NewService() unexpected error: %v", err)
@@ -210,7 +209,7 @@ func TestCreatePrompt(t *testing.T) {
 }
 
 func TestGetPrompt(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	service, err := NewService(ctx, "test-project", "us-central1")
 	if err != nil {
 		t.Fatalf("NewService() unexpected error: %v", err)
@@ -295,7 +294,7 @@ func TestGetPrompt(t *testing.T) {
 }
 
 func TestUpdatePrompt(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	service, err := NewService(ctx, "test-project", "us-central1")
 	if err != nil {
 		t.Fatalf("NewService() unexpected error: %v", err)
@@ -345,7 +344,7 @@ func TestUpdatePrompt(t *testing.T) {
 }
 
 func TestDeletePrompt(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	service, err := NewService(ctx, "test-project", "us-central1")
 	if err != nil {
 		t.Fatalf("NewService() unexpected error: %v", err)
@@ -386,7 +385,7 @@ func TestDeletePrompt(t *testing.T) {
 }
 
 func TestListPrompts(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	service, err := NewService(ctx, "test-project", "us-central1")
 	if err != nil {
 		t.Fatalf("NewService() unexpected error: %v", err)
@@ -416,7 +415,7 @@ func TestListPrompts(t *testing.T) {
 }
 
 func TestCacheOperations(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	service, err := NewService(ctx, "test-project", "us-central1")
 	if err != nil {
 		t.Fatalf("NewService() unexpected error: %v", err)
@@ -467,13 +466,11 @@ func TestCacheOperations(t *testing.T) {
 }
 
 func TestServiceOptions(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 
 	// Test with custom template engine
 	customEngine := NewTemplateProcessorWithOptions(TemplateEngineAdvanced, ValidationModeStrict)
-	service, err := NewService(ctx, "test-project", "us-central1",
-		WithTemplateEngine(customEngine),
-		WithCacheExpiry(5*time.Minute))
+	service, err := NewService(ctx, "test-project", "us-central1") /* WithTemplateEngine(customEngine), WithCacheExpiry(5*time.Minute) */
 	if err != nil {
 		t.Fatalf("NewService() unexpected error: %v", err)
 	}
@@ -489,7 +486,7 @@ func TestServiceOptions(t *testing.T) {
 }
 
 func TestPromptValidation(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	service, err := NewService(ctx, "test-project", "us-central1")
 	if err != nil {
 		t.Fatalf("NewService() unexpected error: %v", err)
@@ -545,7 +542,7 @@ func TestPromptValidation(t *testing.T) {
 }
 
 func TestMetricsIntegration(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	service, err := NewService(ctx, "test-project", "us-central1")
 	if err != nil {
 		t.Fatalf("NewService() unexpected error: %v", err)

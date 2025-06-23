@@ -1,10 +1,11 @@
 // Copyright 2025 The Go A2A Authors
 // SPDX-License-Identifier: Apache-2.0
 
+//go:build integration
+
 package rag_test
 
 import (
-	"context"
 	"fmt"
 	"os"
 	"testing"
@@ -211,7 +212,7 @@ func TestRAGConcurrency(t *testing.T) {
 
 		results := make(chan error, numConcurrentQueries)
 
-		for i := 0; i < numConcurrentQueries; i++ {
+		for i := range numConcurrentQueries {
 			go func(query string) {
 				_, err := client.QuickQuery(ctx, corpus.Name, query)
 				results <- err
@@ -219,7 +220,7 @@ func TestRAGConcurrency(t *testing.T) {
 		}
 
 		// Collect results
-		for i := 0; i < numConcurrentQueries; i++ {
+		for i := range numConcurrentQueries {
 			if err := <-results; err != nil {
 				t.Errorf("Concurrent query %d failed: %v", i, err)
 			}
@@ -231,7 +232,7 @@ func TestRAGConcurrency(t *testing.T) {
 		const numConcurrentLists = 3
 		results := make(chan error, numConcurrentLists)
 
-		for i := 0; i < numConcurrentLists; i++ {
+		for range numConcurrentLists {
 			go func() {
 				_, err := client.ListFiles(ctx, corpus.Name, 10, "")
 				results <- err
@@ -239,7 +240,7 @@ func TestRAGConcurrency(t *testing.T) {
 		}
 
 		// Collect results
-		for i := 0; i < numConcurrentLists; i++ {
+		for i := range numConcurrentLists {
 			if err := <-results; err != nil {
 				t.Errorf("Concurrent file listing %d failed: %v", i, err)
 			}
@@ -289,7 +290,7 @@ func TestRAGResourceNaming(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			ctx := context.Background()
+			ctx := t.Context()
 
 			// Skip actual client creation for unit test
 			if testing.Short() {
@@ -453,7 +454,7 @@ func BenchmarkRAGOperations(b *testing.B) {
 
 	b.Skip("requires Google Cloud credentials")
 
-	ctx := context.Background()
+	ctx := b.Context()
 	projectID := os.Getenv(envGoogleCloudProjectID)
 	location := os.Getenv(envGoogleCloudLocation)
 
@@ -476,7 +477,7 @@ func BenchmarkRAGOperations(b *testing.B) {
 
 	b.Run("list_corpora", func(b *testing.B) {
 		b.ResetTimer()
-		for i := 0; i < b.N; i++ {
+		for b.Loop() {
 			_, err := client.ListCorpora(ctx, 10, "")
 			if err != nil {
 				b.Fatalf("ListCorpora failed: %v", err)
@@ -486,7 +487,7 @@ func BenchmarkRAGOperations(b *testing.B) {
 
 	b.Run("get_corpus", func(b *testing.B) {
 		b.ResetTimer()
-		for i := 0; i < b.N; i++ {
+		for b.Loop() {
 			_, err := client.GetCorpus(ctx, corpus.Name)
 			if err != nil {
 				b.Fatalf("GetCorpus failed: %v", err)
@@ -496,7 +497,7 @@ func BenchmarkRAGOperations(b *testing.B) {
 
 	b.Run("list_files", func(b *testing.B) {
 		b.ResetTimer()
-		for i := 0; i < b.N; i++ {
+		for b.Loop() {
 			_, err := client.ListFiles(ctx, corpus.Name, 10, "")
 			if err != nil {
 				b.Fatalf("ListFiles failed: %v", err)
@@ -506,7 +507,7 @@ func BenchmarkRAGOperations(b *testing.B) {
 
 	b.Run("query_corpus", func(b *testing.B) {
 		b.ResetTimer()
-		for i := 0; i < b.N; i++ {
+		for b.Loop() {
 			_, err := client.QuickQuery(ctx, corpus.Name, "benchmark query")
 			if err != nil {
 				b.Fatalf("QuickQuery failed: %v", err)

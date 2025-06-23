@@ -4,11 +4,13 @@
 package extension
 
 import (
-	"context"
+	"fmt"
 	"strings"
 	"testing"
 
+	"cloud.google.com/go/aiplatform/apiv1beta1/aiplatformpb"
 	"github.com/google/go-cmp/cmp"
+	"google.golang.org/protobuf/types/known/structpb"
 )
 
 func TestNewService(t *testing.T) {
@@ -50,7 +52,7 @@ func TestNewService(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			ctx := context.Background()
+			ctx := t.Context()
 			service, err := NewService(ctx, tt.projectID, tt.location)
 
 			if tt.wantErr {
@@ -89,7 +91,7 @@ func TestNewService(t *testing.T) {
 }
 
 func TestService_CreateExtension(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	service, err := NewService(ctx, "test-project", "us-central1")
 	if err != nil {
 		t.Fatalf("Failed to create service: %v", err)
@@ -98,46 +100,56 @@ func TestService_CreateExtension(t *testing.T) {
 
 	tests := []struct {
 		name    string
-		req     *CreateExtensionRequest
+		req     *aiplatformpb.ImportExtensionRequest
 		wantErr bool
 	}{
 		{
 			name: "valid extension",
-			req: &CreateExtensionRequest{
-				DisplayName: "Test Extension",
-				Description: "A test extension",
-				Manifest: &Manifest{
-					Name:        "test_extension",
-					Description: "Test extension for validation",
-					APISpec: &APISpec{
-						OpenAPIGCSURI: "gs://test-bucket/openapi.yaml",
-					},
-					AuthConfig: &AuthConfig{
-						AuthType:                   AuthTypeGoogleServiceAccount,
-						GoogleServiceAccountConfig: &GoogleServiceAccountConfig{},
+			req: &aiplatformpb.ImportExtensionRequest{
+				Parent: fmt.Sprintf("projects/%s/locations/%s", service.GetProjectID(), service.GetLocation()),
+				Extension: &aiplatformpb.Extension{
+					Name:        "test-extension",
+					DisplayName: "Test Extension",
+					Description: "A test extension",
+					Manifest: &aiplatformpb.ExtensionManifest{
+						Name:        "test_extension",
+						Description: "Test extension for validation",
+						ApiSpec: &aiplatformpb.ExtensionManifest_ApiSpec{
+							ApiSpec: &aiplatformpb.ExtensionManifest_ApiSpec_OpenApiGcsUri{
+								OpenApiGcsUri: "gs://test-bucket/openapi.yaml",
+							},
+						},
+						AuthConfig: &aiplatformpb.AuthConfig{
+							AuthConfig: &aiplatformpb.AuthConfig_GoogleServiceAccountConfig_{},
+							AuthType:   aiplatformpb.AuthType_GOOGLE_SERVICE_ACCOUNT_AUTH,
+						},
 					},
 				},
 			},
 			wantErr: false,
 		},
 		{
-			name:    "nil request",
+			name:    "nil req",
 			req:     nil,
 			wantErr: true,
 		},
 		{
 			name: "empty display name",
-			req: &CreateExtensionRequest{
-				DisplayName: "",
-				Manifest: &Manifest{
-					Name:        "test_extension",
-					Description: "Test extension",
-					APISpec: &APISpec{
-						OpenAPIGCSURI: "gs://test-bucket/openapi.yaml",
-					},
-					AuthConfig: &AuthConfig{
-						AuthType:                   AuthTypeGoogleServiceAccount,
-						GoogleServiceAccountConfig: &GoogleServiceAccountConfig{},
+			req: &aiplatformpb.ImportExtensionRequest{
+				Parent: fmt.Sprintf("projects/%s/locations/%s", service.GetProjectID(), service.GetLocation()),
+				Extension: &aiplatformpb.Extension{
+					Name:        "test-extension",
+					DisplayName: "",
+					Description: "A test extension",
+					Manifest: &aiplatformpb.ExtensionManifest{
+						Name:        "test_extension",
+						Description: "Test extension for validation",
+						ApiSpec: &aiplatformpb.ExtensionManifest_ApiSpec{
+							ApiSpec: &aiplatformpb.ExtensionManifest_ApiSpec_OpenApiGcsUri{
+								OpenApiGcsUri: "gs://test-bucket/openapi.yaml",
+							},
+						},
+						AuthConfig: NewGoogleServiceAccountConfig(""),
 					},
 				},
 			},
@@ -145,25 +157,34 @@ func TestService_CreateExtension(t *testing.T) {
 		},
 		{
 			name: "nil manifest",
-			req: &CreateExtensionRequest{
-				DisplayName: "Test Extension",
-				Manifest:    nil,
+			req: &aiplatformpb.ImportExtensionRequest{
+				Parent: fmt.Sprintf("projects/%s/locations/%s", service.GetProjectID(), service.GetLocation()),
+				Extension: &aiplatformpb.Extension{
+					Name:        "test-extension",
+					DisplayName: "Test Extension",
+					Description: "A test extension",
+					Manifest:    nil,
+				},
 			},
 			wantErr: true,
 		},
 		{
 			name: "invalid manifest - missing name",
-			req: &CreateExtensionRequest{
-				DisplayName: "Test Extension",
-				Manifest: &Manifest{
+			req: &aiplatformpb.ImportExtensionRequest{
+				Parent: fmt.Sprintf("projects/%s/locations/%s", service.GetProjectID(), service.GetLocation()),
+				Extension: &aiplatformpb.Extension{
 					Name:        "",
-					Description: "Test extension",
-					APISpec: &APISpec{
-						OpenAPIGCSURI: "gs://test-bucket/openapi.yaml",
-					},
-					AuthConfig: &AuthConfig{
-						AuthType:                   AuthTypeGoogleServiceAccount,
-						GoogleServiceAccountConfig: &GoogleServiceAccountConfig{},
+					DisplayName: "Test Extension",
+					Description: "Test extension for validation",
+					Manifest: &aiplatformpb.ExtensionManifest{
+						Name:        "test_extension",
+						Description: "Test extension",
+						ApiSpec: &aiplatformpb.ExtensionManifest_ApiSpec{
+							ApiSpec: &aiplatformpb.ExtensionManifest_ApiSpec_OpenApiGcsUri{
+								OpenApiGcsUri: "gs://test-bucket/openapi.yaml",
+							},
+						},
+						AuthConfig: NewGoogleServiceAccountConfig(""),
 					},
 				},
 			},
@@ -171,17 +192,21 @@ func TestService_CreateExtension(t *testing.T) {
 		},
 		{
 			name: "invalid manifest - invalid GCS URI",
-			req: &CreateExtensionRequest{
-				DisplayName: "Test Extension",
-				Manifest: &Manifest{
-					Name:        "test_extension",
-					Description: "Test extension",
-					APISpec: &APISpec{
-						OpenAPIGCSURI: "invalid-uri",
-					},
-					AuthConfig: &AuthConfig{
-						AuthType:                   AuthTypeGoogleServiceAccount,
-						GoogleServiceAccountConfig: &GoogleServiceAccountConfig{},
+			req: &aiplatformpb.ImportExtensionRequest{
+				Parent: fmt.Sprintf("projects/%s/locations/%s", service.GetProjectID(), service.GetLocation()),
+				Extension: &aiplatformpb.Extension{
+					Name:        "test-extension",
+					DisplayName: "Test Extension",
+					Description: "Test extension for validation",
+					Manifest: &aiplatformpb.ExtensionManifest{
+						Name:        "test_extension",
+						Description: "Test extension",
+						ApiSpec: &aiplatformpb.ExtensionManifest_ApiSpec{
+							ApiSpec: &aiplatformpb.ExtensionManifest_ApiSpec_OpenApiGcsUri{
+								OpenApiGcsUri: "invalid-uri",
+							},
+						},
+						AuthConfig: NewGoogleServiceAccountConfig(""),
 					},
 				},
 			},
@@ -211,11 +236,11 @@ func TestService_CreateExtension(t *testing.T) {
 			}
 
 			// Verify extension properties
-			if ext.DisplayName != tt.req.DisplayName {
-				t.Errorf("CreateExtension() displayName = %v, want %v", ext.DisplayName, tt.req.DisplayName)
+			if ext.DisplayName != tt.req.GetExtension().GetDisplayName() {
+				t.Errorf("CreateExtension() displayName = %v, want %v", ext.DisplayName, tt.req.GetExtension().GetDisplayName())
 			}
-			if ext.Description != tt.req.Description {
-				t.Errorf("CreateExtension() description = %v, want %v", ext.Description, tt.req.Description)
+			if ext.Description != tt.req.GetExtension().GetDescription() {
+				t.Errorf("CreateExtension() description = %v, want %v", ext.Description, tt.req.GetExtension().GetDescription())
 			}
 			if ext.State != ExtensionStateActive {
 				t.Errorf("CreateExtension() state = %v, want %v", ext.State, ExtensionStateActive)
@@ -225,7 +250,7 @@ func TestService_CreateExtension(t *testing.T) {
 }
 
 func TestService_CreateFromHub(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	service, err := NewService(ctx, "test-project", "us-central1")
 	if err != nil {
 		t.Fatalf("Failed to create service: %v", err)
@@ -245,6 +270,11 @@ func TestService_CreateFromHub(t *testing.T) {
 		{
 			name:          "vertex ai search",
 			extensionType: PrebuiltExtensionVertexAISearch,
+			wantErr:       false,
+		},
+		{
+			name:          "webpage browser",
+			extensionType: PrebuiltExtensionWebpageBrowser,
 			wantErr:       false,
 		},
 		{
@@ -285,7 +315,7 @@ func TestService_CreateFromHub(t *testing.T) {
 }
 
 func TestService_ExecuteExtension(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	service, err := NewService(ctx, "test-project", "us-central1")
 	if err != nil {
 		t.Fatalf("Failed to create service: %v", err)
@@ -294,39 +324,51 @@ func TestService_ExecuteExtension(t *testing.T) {
 
 	tests := []struct {
 		name    string
-		req     *ExecuteExtensionRequest
+		req     func(t *testing.T) *aiplatformpb.ExecuteExtensionRequest
 		wantErr bool
 	}{
 		{
 			name: "valid execution",
-			req: &ExecuteExtensionRequest{
-				Name:        "projects/test-project/locations/us-central1/extensions/ext_123",
-				OperationID: "test_operation",
-				OperationParams: map[string]any{
+			req: func(t *testing.T) *aiplatformpb.ExecuteExtensionRequest {
+				operationParams, err := structpb.NewStruct(map[string]any{
 					"param1": "value1",
 					"param2": 42,
-				},
+				})
+				if err != nil {
+					t.Fatal(err)
+				}
+				return &aiplatformpb.ExecuteExtensionRequest{
+					Name:            "projects/test-project/locations/us-central1/extensions/ext_123",
+					OperationId:     "test_operation",
+					OperationParams: operationParams,
+				}
 			},
 			wantErr: false,
 		},
 		{
-			name:    "nil request",
-			req:     nil,
+			name: "nil request",
+			req: func(t *testing.T) *aiplatformpb.ExecuteExtensionRequest {
+				return nil
+			},
 			wantErr: true,
 		},
 		{
 			name: "empty name",
-			req: &ExecuteExtensionRequest{
-				Name:        "",
-				OperationID: "test_operation",
+			req: func(t *testing.T) *aiplatformpb.ExecuteExtensionRequest {
+				return &aiplatformpb.ExecuteExtensionRequest{
+					Name:        "",
+					OperationId: "test_operation",
+				}
 			},
 			wantErr: true,
 		},
 		{
 			name: "empty operation ID",
-			req: &ExecuteExtensionRequest{
-				Name:        "projects/test-project/locations/us-central1/extensions/ext_123",
-				OperationID: "",
+			req: func(t *testing.T) *aiplatformpb.ExecuteExtensionRequest {
+				return &aiplatformpb.ExecuteExtensionRequest{
+					Name:        "projects/test-project/locations/us-central1/extensions/ext_123",
+					OperationId: "",
+				}
 			},
 			wantErr: true,
 		},
@@ -334,7 +376,7 @@ func TestService_ExecuteExtension(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			resp, err := service.ExecuteExtension(ctx, tt.req)
+			resp, err := service.ExecuteExtension(ctx, tt.req(t))
 
 			if tt.wantErr {
 				if err == nil {
@@ -362,7 +404,7 @@ func TestService_ExecuteExtension(t *testing.T) {
 }
 
 func TestService_ListExtensions(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	service, err := NewService(ctx, "test-project", "us-central1")
 	if err != nil {
 		t.Fatalf("Failed to create service: %v", err)
@@ -387,7 +429,7 @@ func TestService_ListExtensions(t *testing.T) {
 	}
 
 	// Test with custom request
-	req := &ListExtensionsRequest{
+	req := &aiplatformpb.ListExtensionsRequest{
 		PageSize:  10,
 		PageToken: "test-token",
 		Filter:    "state=ACTIVE",
@@ -405,93 +447,103 @@ func TestService_ListExtensions(t *testing.T) {
 }
 
 func TestValidateManifest(t *testing.T) {
-	service := &Service{}
+	service := &service{}
 
 	tests := []struct {
 		name     string
-		manifest *Manifest
+		manifest *aiplatformpb.ExtensionManifest
 		wantErr  bool
 	}{
 		{
 			name: "valid manifest",
-			manifest: &Manifest{
+			manifest: &aiplatformpb.ExtensionManifest{
 				Name:        "test_extension",
 				Description: "Test extension",
-				APISpec: &APISpec{
-					OpenAPIGCSURI: "gs://test-bucket/openapi.yaml",
+				ApiSpec: &aiplatformpb.ExtensionManifest_ApiSpec{
+					ApiSpec: &aiplatformpb.ExtensionManifest_ApiSpec_OpenApiGcsUri{
+						OpenApiGcsUri: "gs://test-bucket/openapi.yaml",
+					},
 				},
-				AuthConfig: &AuthConfig{
-					AuthType:                   AuthTypeGoogleServiceAccount,
-					GoogleServiceAccountConfig: &GoogleServiceAccountConfig{},
+				AuthConfig: &aiplatformpb.AuthConfig{
+					AuthConfig: &aiplatformpb.AuthConfig_GoogleServiceAccountConfig_{},
+					AuthType:   aiplatformpb.AuthType_GOOGLE_SERVICE_ACCOUNT_AUTH,
 				},
 			},
 			wantErr: false,
 		},
 		{
 			name: "missing name",
-			manifest: &Manifest{
+			manifest: &aiplatformpb.ExtensionManifest{
 				Name:        "",
 				Description: "Test extension",
-				APISpec: &APISpec{
-					OpenAPIGCSURI: "gs://test-bucket/openapi.yaml",
+				ApiSpec: &aiplatformpb.ExtensionManifest_ApiSpec{
+					ApiSpec: &aiplatformpb.ExtensionManifest_ApiSpec_OpenApiGcsUri{
+						OpenApiGcsUri: "gs://test-bucket/openapi.yaml",
+					},
 				},
-				AuthConfig: &AuthConfig{
-					AuthType:                   AuthTypeGoogleServiceAccount,
-					GoogleServiceAccountConfig: &GoogleServiceAccountConfig{},
+				AuthConfig: &aiplatformpb.AuthConfig{
+					AuthConfig: &aiplatformpb.AuthConfig_GoogleServiceAccountConfig_{},
+					AuthType:   aiplatformpb.AuthType_GOOGLE_SERVICE_ACCOUNT_AUTH,
 				},
 			},
 			wantErr: true,
 		},
 		{
 			name: "missing description",
-			manifest: &Manifest{
+			manifest: &aiplatformpb.ExtensionManifest{
 				Name:        "test_extension",
 				Description: "",
-				APISpec: &APISpec{
-					OpenAPIGCSURI: "gs://test-bucket/openapi.yaml",
+				ApiSpec: &aiplatformpb.ExtensionManifest_ApiSpec{
+					ApiSpec: &aiplatformpb.ExtensionManifest_ApiSpec_OpenApiGcsUri{
+						OpenApiGcsUri: "gs://test-bucket/openapi.yaml",
+					},
 				},
-				AuthConfig: &AuthConfig{
-					AuthType:                   AuthTypeGoogleServiceAccount,
-					GoogleServiceAccountConfig: &GoogleServiceAccountConfig{},
+				AuthConfig: &aiplatformpb.AuthConfig{
+					AuthConfig: &aiplatformpb.AuthConfig_GoogleServiceAccountConfig_{},
+					AuthType:   aiplatformpb.AuthType_GOOGLE_SERVICE_ACCOUNT_AUTH,
 				},
 			},
 			wantErr: true,
 		},
 		{
 			name: "missing API spec",
-			manifest: &Manifest{
+			manifest: &aiplatformpb.ExtensionManifest{
 				Name:        "test_extension",
 				Description: "Test extension",
-				APISpec:     nil,
-				AuthConfig: &AuthConfig{
-					AuthType:                   AuthTypeGoogleServiceAccount,
-					GoogleServiceAccountConfig: &GoogleServiceAccountConfig{},
+				ApiSpec:     nil,
+				AuthConfig: &aiplatformpb.AuthConfig{
+					AuthConfig: &aiplatformpb.AuthConfig_GoogleServiceAccountConfig_{},
+					AuthType:   aiplatformpb.AuthType_GOOGLE_SERVICE_ACCOUNT_AUTH,
 				},
 			},
 			wantErr: true,
 		},
 		{
 			name: "invalid GCS URI",
-			manifest: &Manifest{
+			manifest: &aiplatformpb.ExtensionManifest{
 				Name:        "test_extension",
 				Description: "Test extension",
-				APISpec: &APISpec{
-					OpenAPIGCSURI: "invalid-uri",
+				ApiSpec: &aiplatformpb.ExtensionManifest_ApiSpec{
+					ApiSpec: &aiplatformpb.ExtensionManifest_ApiSpec_OpenApiGcsUri{
+						OpenApiGcsUri: "invalid-uri",
+					},
 				},
-				AuthConfig: &AuthConfig{
-					AuthType:                   AuthTypeGoogleServiceAccount,
-					GoogleServiceAccountConfig: &GoogleServiceAccountConfig{},
+				AuthConfig: &aiplatformpb.AuthConfig{
+					AuthConfig: &aiplatformpb.AuthConfig_GoogleServiceAccountConfig_{},
+					AuthType:   aiplatformpb.AuthType_GOOGLE_SERVICE_ACCOUNT_AUTH,
 				},
 			},
 			wantErr: true,
 		},
 		{
 			name: "missing auth config",
-			manifest: &Manifest{
+			manifest: &aiplatformpb.ExtensionManifest{
 				Name:        "test_extension",
 				Description: "Test extension",
-				APISpec: &APISpec{
-					OpenAPIGCSURI: "gs://test-bucket/openapi.yaml",
+				ApiSpec: &aiplatformpb.ExtensionManifest_ApiSpec{
+					ApiSpec: &aiplatformpb.ExtensionManifest_ApiSpec_OpenApiGcsUri{
+						OpenApiGcsUri: "gs://test-bucket/openapi.yaml",
+					},
 				},
 				AuthConfig: nil,
 			},
@@ -499,14 +551,16 @@ func TestValidateManifest(t *testing.T) {
 		},
 		{
 			name: "unspecified auth type",
-			manifest: &Manifest{
+			manifest: &aiplatformpb.ExtensionManifest{
 				Name:        "test_extension",
 				Description: "Test extension",
-				APISpec: &APISpec{
-					OpenAPIGCSURI: "gs://test-bucket/openapi.yaml",
+				ApiSpec: &aiplatformpb.ExtensionManifest_ApiSpec{
+					ApiSpec: &aiplatformpb.ExtensionManifest_ApiSpec_OpenApiGcsUri{
+						OpenApiGcsUri: "gs://test-bucket/openapi.yaml",
+					},
 				},
-				AuthConfig: &AuthConfig{
-					AuthType: AuthTypeUnspecified,
+				AuthConfig: &aiplatformpb.AuthConfig{
+					AuthType: aiplatformpb.AuthType_AUTH_TYPE_UNSPECIFIED,
 				},
 			},
 			wantErr: true,
@@ -531,7 +585,7 @@ func TestValidateManifest(t *testing.T) {
 }
 
 func TestGetPrebuiltExtensionConfig(t *testing.T) {
-	service := &Service{}
+	service := &service{}
 
 	tests := []struct {
 		name          string
@@ -588,10 +642,10 @@ func TestGetPrebuiltExtensionConfig(t *testing.T) {
 			if manifest.Description == "" {
 				t.Errorf("getPrebuiltExtensionConfig() manifest description is empty")
 			}
-			if manifest.APISpec == nil || manifest.APISpec.OpenAPIGCSURI == "" {
+			if manifest.GetApiSpec() == nil || manifest.GetApiSpec().GetOpenApiGcsUri() == "" {
 				t.Errorf("getPrebuiltExtensionConfig() manifest API spec is invalid")
 			}
-			if manifest.AuthConfig == nil || manifest.AuthConfig.AuthType != AuthTypeGoogleServiceAccount {
+			if manifest.AuthConfig == nil || manifest.AuthConfig.AuthType != aiplatformpb.AuthType_GOOGLE_SERVICE_ACCOUNT_AUTH {
 				t.Errorf("getPrebuiltExtensionConfig() manifest auth config is invalid")
 			}
 		})
@@ -599,7 +653,7 @@ func TestGetPrebuiltExtensionConfig(t *testing.T) {
 }
 
 func TestGenerateExtensionName(t *testing.T) {
-	service := &Service{
+	service := &service{
 		projectID: "test-project",
 		location:  "us-central1",
 	}
@@ -615,7 +669,7 @@ func TestGenerateExtensionName(t *testing.T) {
 }
 
 func TestGetSupportedPrebuiltExtensions(t *testing.T) {
-	service := &Service{}
+	service := &service{}
 
 	extensions := service.GetSupportedPrebuiltExtensions()
 
@@ -635,7 +689,7 @@ func TestGetSupportedPrebuiltExtensions(t *testing.T) {
 }
 
 func TestValidatePrebuiltExtensionType(t *testing.T) {
-	service := &Service{}
+	service := &service{}
 
 	// Test valid types
 	validTypes := []PrebuiltExtensionType{

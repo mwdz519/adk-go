@@ -13,7 +13,7 @@ import (
 // Version management methods for the prompts service
 
 // CreateVersion creates a new version of an existing prompt.
-func (s *Service) CreateVersion(ctx context.Context, req *CreateVersionRequest) (*PromptVersion, error) {
+func (s *service) CreateVersion(ctx context.Context, req *CreateVersionRequest) (*PromptVersion, error) {
 	if req.PromptID == "" {
 		return nil, NewInvalidRequestError("prompt_id", "cannot be empty")
 	}
@@ -50,7 +50,7 @@ func (s *Service) CreateVersion(ctx context.Context, req *CreateVersionRequest) 
 }
 
 // GetVersion retrieves a specific version of a prompt.
-func (s *Service) GetVersion(ctx context.Context, promptID, versionID string) (*PromptVersion, error) {
+func (s *service) GetVersion(ctx context.Context, promptID, versionID string) (*PromptVersion, error) {
 	if promptID == "" {
 		return nil, NewInvalidRequestError("prompt_id", "cannot be empty")
 	}
@@ -67,7 +67,7 @@ func (s *Service) GetVersion(ctx context.Context, promptID, versionID string) (*
 }
 
 // ListVersions lists all versions of a prompt.
-func (s *Service) ListVersions(ctx context.Context, req *ListVersionsRequest) (*ListVersionsResponse, error) {
+func (s *service) ListVersions(ctx context.Context, req *ListVersionsRequest) (*ListVersionsResponse, error) {
 	if req.PromptID == "" {
 		return nil, NewInvalidRequestError("prompt_id", "cannot be empty")
 	}
@@ -93,10 +93,7 @@ func (s *Service) ListVersions(ctx context.Context, req *ListVersionsRequest) (*
 		startIndex = s.parsePageToken(req.PageToken)
 	}
 
-	endIndex := startIndex + int(pageSize)
-	if endIndex > len(filteredVersions) {
-		endIndex = len(filteredVersions)
-	}
+	endIndex := min(startIndex+int(pageSize), len(filteredVersions))
 
 	var resultVersions []*PromptVersion
 	var nextPageToken string
@@ -117,7 +114,7 @@ func (s *Service) ListVersions(ctx context.Context, req *ListVersionsRequest) (*
 }
 
 // RestoreVersion restores a previous version as the current version.
-func (s *Service) RestoreVersion(ctx context.Context, req *RestoreVersionRequest) (*PromptVersion, error) {
+func (s *service) RestoreVersion(ctx context.Context, req *RestoreVersionRequest) (*PromptVersion, error) {
 	if req.PromptID == "" {
 		return nil, NewInvalidRequestError("prompt_id", "cannot be empty")
 	}
@@ -178,7 +175,7 @@ func (s *Service) RestoreVersion(ctx context.Context, req *RestoreVersionRequest
 }
 
 // DeleteVersion deletes a specific version of a prompt.
-func (s *Service) DeleteVersion(ctx context.Context, promptID, versionID string) error {
+func (s *service) DeleteVersion(ctx context.Context, promptID, versionID string) error {
 	if promptID == "" {
 		return NewInvalidRequestError("prompt_id", "cannot be empty")
 	}
@@ -208,7 +205,7 @@ func (s *Service) DeleteVersion(ctx context.Context, promptID, versionID string)
 // Internal version management methods
 
 // createPromptVersion creates a new version of a prompt.
-func (s *Service) createPromptVersion(ctx context.Context, promptID string, prompt *Prompt, versionName, changelog string) (*PromptVersion, error) {
+func (s *service) createPromptVersion(ctx context.Context, promptID string, prompt *Prompt, versionName, changelog string) (*PromptVersion, error) {
 	now := time.Now()
 
 	version := &PromptVersion{
@@ -240,7 +237,7 @@ func (s *Service) createPromptVersion(ctx context.Context, promptID string, prom
 }
 
 // getPromptVersion retrieves a specific version.
-func (s *Service) getPromptVersion(ctx context.Context, promptID, versionID string) (*PromptVersion, error) {
+func (s *service) getPromptVersion(ctx context.Context, promptID, versionID string) (*PromptVersion, error) {
 	// Try cache first
 	if version := s.getCachedVersion(promptID, versionID); version != nil {
 		return version, nil
@@ -259,7 +256,7 @@ func (s *Service) getPromptVersion(ctx context.Context, promptID, versionID stri
 }
 
 // listPromptVersions lists all versions of a prompt.
-func (s *Service) listPromptVersions(ctx context.Context, promptID string) ([]*PromptVersion, error) {
+func (s *service) listPromptVersions(ctx context.Context, promptID string) ([]*PromptVersion, error) {
 	// Load from cloud storage (simulated)
 	versions, err := s.listVersionsFromCloud(ctx, promptID)
 	if err != nil {
@@ -275,7 +272,7 @@ func (s *Service) listPromptVersions(ctx context.Context, promptID string) ([]*P
 }
 
 // deletePromptVersion deletes a version.
-func (s *Service) deletePromptVersion(ctx context.Context, promptID, versionID string) error {
+func (s *service) deletePromptVersion(ctx context.Context, promptID, versionID string) error {
 	// Delete from cloud storage (simulated)
 	if err := s.deleteVersionFromCloud(ctx, promptID, versionID); err != nil {
 		return err
@@ -290,7 +287,7 @@ func (s *Service) deletePromptVersion(ctx context.Context, promptID, versionID s
 // Version caching methods
 
 // cacheVersion caches a prompt version.
-func (s *Service) cacheVersion(version *PromptVersion) {
+func (s *service) cacheVersion(version *PromptVersion) {
 	s.cacheMutex.Lock()
 	defer s.cacheMutex.Unlock()
 
@@ -311,7 +308,7 @@ func (s *Service) cacheVersion(version *PromptVersion) {
 }
 
 // getCachedVersion retrieves a cached version.
-func (s *Service) getCachedVersion(promptID, versionID string) *PromptVersion {
+func (s *service) getCachedVersion(promptID, versionID string) *PromptVersion {
 	s.cacheMutex.RLock()
 	defer s.cacheMutex.RUnlock()
 
@@ -330,7 +327,7 @@ func (s *Service) getCachedVersion(promptID, versionID string) *PromptVersion {
 }
 
 // removeCachedVersion removes a version from cache.
-func (s *Service) removeCachedVersion(promptID, versionID string) {
+func (s *service) removeCachedVersion(promptID, versionID string) {
 	s.cacheMutex.Lock()
 	defer s.cacheMutex.Unlock()
 
@@ -350,12 +347,12 @@ func (s *Service) removeCachedVersion(promptID, versionID string) {
 // Utility methods
 
 // generateVersionID generates a unique version ID.
-func (s *Service) generateVersionID() string {
+func (s *service) generateVersionID() string {
 	return fmt.Sprintf("version_%d", time.Now().UnixNano())
 }
 
 // promptFromVersion creates a prompt from a version.
-func (s *Service) promptFromVersion(basePrompt *Prompt, version *PromptVersion) *Prompt {
+func (s *service) promptFromVersion(basePrompt *Prompt, version *PromptVersion) *Prompt {
 	prompt := *basePrompt
 	prompt.Template = version.Template
 	prompt.Variables = version.Variables
@@ -368,7 +365,7 @@ func (s *Service) promptFromVersion(basePrompt *Prompt, version *PromptVersion) 
 }
 
 // filterVersions applies filtering to a list of versions.
-func (s *Service) filterVersions(versions []*PromptVersion, req *ListVersionsRequest) []*PromptVersion {
+func (s *service) filterVersions(versions []*PromptVersion, req *ListVersionsRequest) []*PromptVersion {
 	var filtered []*PromptVersion
 
 	for _, version := range versions {
@@ -390,19 +387,19 @@ func (s *Service) filterVersions(versions []*PromptVersion, req *ListVersionsReq
 }
 
 // parsePageToken parses a pagination token.
-func (s *Service) parsePageToken(token string) int {
+func (s *service) parsePageToken(token string) int {
 	// In a real implementation, this would properly decode the token
 	return 0
 }
 
 // generatePageToken generates a pagination token.
-func (s *Service) generatePageToken(offset int) string {
+func (s *service) generatePageToken(offset int) string {
 	// In a real implementation, this would properly encode the token
 	return fmt.Sprintf("offset_%d", offset)
 }
 
 // getPromptMetrics retrieves usage metrics for a prompt (placeholder).
-func (s *Service) getPromptMetrics(ctx context.Context, promptID string) (*PromptMetrics, error) {
+func (s *service) getPromptMetrics(ctx context.Context, promptID string) (*PromptMetrics, error) {
 	// This would implement actual metrics retrieval
 	return &PromptMetrics{
 		PromptID:    promptID,
@@ -414,7 +411,7 @@ func (s *Service) getPromptMetrics(ctx context.Context, promptID string) (*Promp
 // Placeholder methods for cloud operations (to be implemented with actual Vertex AI APIs)
 
 // saveVersionToCloud saves a version to cloud storage.
-func (s *Service) saveVersionToCloud(ctx context.Context, version *PromptVersion) error {
+func (s *service) saveVersionToCloud(ctx context.Context, version *PromptVersion) error {
 	s.logger.InfoContext(ctx, "Saving version to cloud storage",
 		slog.String("prompt_id", version.PromptID),
 		slog.String("version_id", version.VersionID))
@@ -422,7 +419,7 @@ func (s *Service) saveVersionToCloud(ctx context.Context, version *PromptVersion
 }
 
 // loadVersionFromCloud loads a version from cloud storage.
-func (s *Service) loadVersionFromCloud(ctx context.Context, promptID, versionID string) (*PromptVersion, error) {
+func (s *service) loadVersionFromCloud(ctx context.Context, promptID, versionID string) (*PromptVersion, error) {
 	s.logger.InfoContext(ctx, "Loading version from cloud storage",
 		slog.String("prompt_id", promptID),
 		slog.String("version_id", versionID))
@@ -430,14 +427,14 @@ func (s *Service) loadVersionFromCloud(ctx context.Context, promptID, versionID 
 }
 
 // listVersionsFromCloud lists versions from cloud storage.
-func (s *Service) listVersionsFromCloud(ctx context.Context, promptID string) ([]*PromptVersion, error) {
+func (s *service) listVersionsFromCloud(ctx context.Context, promptID string) ([]*PromptVersion, error) {
 	s.logger.InfoContext(ctx, "Listing versions from cloud storage",
 		slog.String("prompt_id", promptID))
 	return []*PromptVersion{}, nil
 }
 
 // deleteVersionFromCloud deletes a version from cloud storage.
-func (s *Service) deleteVersionFromCloud(ctx context.Context, promptID, versionID string) error {
+func (s *service) deleteVersionFromCloud(ctx context.Context, promptID, versionID string) error {
 	s.logger.InfoContext(ctx, "Deleting version from cloud storage",
 		slog.String("prompt_id", promptID),
 		slog.String("version_id", versionID))

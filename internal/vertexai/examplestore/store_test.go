@@ -4,7 +4,6 @@
 package examplestore
 
 import (
-	"context"
 	"strings"
 	"testing"
 	"time"
@@ -70,7 +69,7 @@ func TestStoreConfig_Validate(t *testing.T) {
 }
 
 func TestStoreService_CreateStore(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	service, err := NewService(ctx, "test-project", SupportedRegion)
 	if err != nil {
 		t.Skipf("Skipping test due to credential error: %v", err)
@@ -153,7 +152,7 @@ func TestStoreService_CreateStore(t *testing.T) {
 }
 
 func TestStoreService_ListStores(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	service, err := NewService(ctx, "test-project", SupportedRegion)
 	if err != nil {
 		t.Skipf("Skipping test due to credential error: %v", err)
@@ -185,7 +184,7 @@ func TestStoreService_ListStores(t *testing.T) {
 }
 
 func TestStoreService_GetStore(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	service, err := NewService(ctx, "test-project", SupportedRegion)
 	if err != nil {
 		t.Skipf("Skipping test due to credential error: %v", err)
@@ -220,7 +219,7 @@ func TestStoreService_GetStore(t *testing.T) {
 }
 
 func TestStoreService_DeleteStore(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	service, err := NewService(ctx, "test-project", SupportedRegion)
 	if err != nil {
 		t.Skipf("Skipping test due to credential error: %v", err)
@@ -241,7 +240,7 @@ func TestStoreService_DeleteStore(t *testing.T) {
 }
 
 func TestStoreService_GetStoreStats(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	service, err := NewService(ctx, "test-project", SupportedRegion)
 	if err != nil {
 		t.Skipf("Skipping test due to credential error: %v", err)
@@ -274,7 +273,7 @@ func TestStoreService_GetStoreStats(t *testing.T) {
 }
 
 func TestStoreService_UpdateStore(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	service, err := NewService(ctx, "test-project", SupportedRegion)
 	if err != nil {
 		t.Skipf("Skipping test due to credential error: %v", err)
@@ -311,7 +310,7 @@ func TestStoreService_UpdateStore(t *testing.T) {
 }
 
 func TestStoreService_WaitForStoreCreation(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	service, err := NewService(ctx, "test-project", SupportedRegion)
 	if err != nil {
 		t.Skipf("Skipping test due to credential error: %v", err)
@@ -341,7 +340,7 @@ func TestStoreService_WaitForStoreCreation(t *testing.T) {
 }
 
 func TestStoreService_ListAllStores(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	service, err := NewService(ctx, "test-project", SupportedRegion)
 	if err != nil {
 		t.Skipf("Skipping test due to credential error: %v", err)

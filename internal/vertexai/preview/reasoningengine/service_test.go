@@ -38,7 +38,7 @@ func TestNewService(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			ctx := context.Background()
+			ctx := t.Context()
 			service, err := NewService(ctx, tt.projectID, tt.location)
 
 			if (err != nil) != tt.wantErr {
@@ -70,7 +70,7 @@ func TestNewService(t *testing.T) {
 }
 
 func TestService_RegisterHandler(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	service, err := NewService(ctx, "test-project", "us-central1")
 	if err != nil {
 		t.Fatalf("Failed to create service: %v", err)
@@ -110,7 +110,7 @@ func TestService_RegisterHandler(t *testing.T) {
 }
 
 func TestService_validateConfig(t *testing.T) {
-	service := &Service{}
+	service := &service{}
 
 	tests := []struct {
 		name    string
@@ -163,7 +163,7 @@ func TestService_validateConfig(t *testing.T) {
 }
 
 func TestService_CreateReasoningEngine(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	service, err := NewService(ctx, "test-project", "us-central1")
 	if err != nil {
 		t.Fatalf("Failed to create service: %v", err)
@@ -209,7 +209,7 @@ func TestService_CreateReasoningEngine(t *testing.T) {
 }
 
 func TestService_GetReasoningEngine(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	service, err := NewService(ctx, "test-project", "us-central1")
 	if err != nil {
 		t.Fatalf("Failed to create service: %v", err)
@@ -247,7 +247,7 @@ func TestService_GetReasoningEngine(t *testing.T) {
 }
 
 func TestService_ListReasoningEngines(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	service, err := NewService(ctx, "test-project", "us-central1")
 	if err != nil {
 		t.Fatalf("Failed to create service: %v", err)
@@ -317,7 +317,7 @@ func TestService_ListReasoningEngines(t *testing.T) {
 }
 
 func TestService_UpdateReasoningEngine(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	service, err := NewService(ctx, "test-project", "us-central1")
 	if err != nil {
 		t.Fatalf("Failed to create service: %v", err)
@@ -375,7 +375,7 @@ func TestService_UpdateReasoningEngine(t *testing.T) {
 }
 
 func TestService_DeleteReasoningEngine(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	service, err := NewService(ctx, "test-project", "us-central1")
 	if err != nil {
 		t.Fatalf("Failed to create service: %v", err)
@@ -419,7 +419,7 @@ func TestService_DeleteReasoningEngine(t *testing.T) {
 }
 
 func TestService_Query(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	service, err := NewService(ctx, "test-project", "us-central1")
 	if err != nil {
 		t.Fatalf("Failed to create service: %v", err)
@@ -498,7 +498,7 @@ func TestService_Query(t *testing.T) {
 }
 
 func TestService_QueryStream(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	service, err := NewService(ctx, "test-project", "us-central1")
 	if err != nil {
 		t.Fatalf("Failed to create service: %v", err)
@@ -557,7 +557,7 @@ func TestService_QueryStream(t *testing.T) {
 }
 
 func TestService_GetMetrics(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	service, err := NewService(ctx, "test-project", "us-central1")
 	if err != nil {
 		t.Fatalf("Failed to create service: %v", err)
@@ -608,7 +608,7 @@ func TestService_GetMetrics(t *testing.T) {
 }
 
 func TestService_GetLogs(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	service, err := NewService(ctx, "test-project", "us-central1")
 	if err != nil {
 		t.Fatalf("Failed to create service: %v", err)
@@ -775,7 +775,7 @@ func TestNewDeploymentSpec(t *testing.T) {
 
 // Benchmark tests
 func BenchmarkService_Query(b *testing.B) {
-	ctx := context.Background()
+	ctx := b.Context()
 	service, err := NewService(ctx, "test-project", "us-central1")
 	if err != nil {
 		b.Fatalf("Failed to create service: %v", err)
@@ -789,8 +789,7 @@ func BenchmarkService_Query(b *testing.B) {
 
 	input := map[string]any{"input": "test"}
 
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		_, err := service.Query(ctx, "bench-agent", input)
 		if err != nil {
 			b.Fatalf("Query() error = %v", err)
@@ -802,7 +801,7 @@ func BenchmarkService_Query(b *testing.B) {
 func TestService_Integration(t *testing.T) {
 	t.Skip("Integration test requires API keys - enable manually for testing")
 
-	ctx := context.Background()
+	ctx := t.Context()
 	service, err := NewService(ctx, "your-project-id", "us-central1")
 	if err != nil {
 		t.Fatalf("Failed to create service: %v", err)

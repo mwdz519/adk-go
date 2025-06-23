@@ -4,10 +4,7 @@
 package modelgarden
 
 import (
-	"context"
 	"time"
-
-	"github.com/go-a2a/adk-go/types"
 )
 
 // ModelCategory represents the category of a model in Model Garden.
@@ -107,10 +104,10 @@ type ModelInfo struct {
 	Pricing *ModelPricing `json:"pricing,omitempty"`
 
 	// CreateTime is when the model was added to Model Garden.
-	CreateTime time.Time `json:"create_time,omitempty"`
+	CreateTime time.Time `json:"create_time,omitzero"`
 
 	// UpdateTime is when the model was last updated.
-	UpdateTime time.Time `json:"update_time,omitempty"`
+	UpdateTime time.Time `json:"update_time,omitzero"`
 
 	// Tags are labels associated with the model.
 	Tags []string `json:"tags,omitempty"`
@@ -309,10 +306,10 @@ type DeploymentInfo struct {
 	CurrentReplicas int32 `json:"current_replicas,omitempty"`
 
 	// CreateTime is when the deployment was created.
-	CreateTime time.Time `json:"create_time,omitempty"`
+	CreateTime time.Time `json:"create_time,omitzero"`
 
 	// UpdateTime is when the deployment was last updated.
-	UpdateTime time.Time `json:"update_time,omitempty"`
+	UpdateTime time.Time `json:"update_time,omitzero"`
 
 	// Config contains deployment configuration.
 	Config *DeploymentConfig `json:"config,omitempty"`
@@ -387,7 +384,7 @@ type DeploymentMetrics struct {
 	MemoryUtilization float64 `json:"memory_utilization,omitempty"`
 
 	// LastUpdated is when the metrics were last updated.
-	LastUpdated time.Time `json:"last_updated,omitempty"`
+	LastUpdated time.Time `json:"last_updated,omitzero"`
 }
 
 // Request and Response Types
@@ -492,34 +489,4 @@ type ListDeploymentsResponse struct {
 
 	// TotalSize is the total number of deployments (if known).
 	TotalSize int32 `json:"total_size,omitempty"`
-}
-
-// ModelGardenService defines the interface for Model Garden operations.
-type ModelGardenService interface {
-	// ListModels lists available models in Model Garden.
-	ListModels(ctx context.Context, opts *ListModelsOptions) (*ListModelsResponse, error)
-
-	// GetModel retrieves detailed information about a specific model.
-	GetModel(ctx context.Context, modelName string) (*ModelInfo, error)
-
-	// DeployModel deploys a model from Model Garden.
-	DeployModel(ctx context.Context, req *DeployModelRequest) (*DeploymentInfo, error)
-
-	// GetDeployment retrieves information about a specific deployment.
-	GetDeployment(ctx context.Context, deploymentName string) (*DeploymentInfo, error)
-
-	// ListDeployments lists all deployments.
-	ListDeployments(ctx context.Context, opts *ListDeploymentsOptions) (*ListDeploymentsResponse, error)
-
-	// GetDeployedModel returns a model interface for a deployed model.
-	GetDeployedModel(ctx context.Context, deploymentName string) (types.Model, error)
-
-	// UpdateDeployment updates an existing deployment.
-	UpdateDeployment(ctx context.Context, deploymentName string, config *DeploymentConfig) (*DeploymentInfo, error)
-
-	// DeleteDeployment deletes a deployment.
-	DeleteDeployment(ctx context.Context, deploymentName string) error
-
-	// Close closes the service and releases resources.
-	Close() error
 }

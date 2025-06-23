@@ -4,7 +4,6 @@
 package examplestore
 
 import (
-	"context"
 	"fmt"
 	"testing"
 )
@@ -74,7 +73,7 @@ func TestSearchQuery_Validate(t *testing.T) {
 }
 
 func TestSearchService_SearchExamples(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	service, err := NewService(ctx, "test-project", SupportedRegion)
 	if err != nil {
 		t.Skipf("Skipping test due to credential error: %v", err)
@@ -187,7 +186,7 @@ func TestSearchService_SearchExamples(t *testing.T) {
 }
 
 func TestSearchService_SearchSimilarExamples(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	service, err := NewService(ctx, "test-project", SupportedRegion)
 	if err != nil {
 		t.Skipf("Skipping test due to credential error: %v", err)
@@ -226,7 +225,7 @@ func TestSearchService_SearchSimilarExamples(t *testing.T) {
 }
 
 func TestSearchService_SearchWithFilters(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	service, err := NewService(ctx, "test-project", SupportedRegion)
 	if err != nil {
 		t.Skipf("Skipping test due to credential error: %v", err)
@@ -299,7 +298,7 @@ func TestSearchService_SearchWithFilters(t *testing.T) {
 }
 
 func TestSearchService_GetRelevantExamples(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	service, err := NewService(ctx, "test-project", SupportedRegion)
 	if err != nil {
 		t.Skipf("Skipping test due to credential error: %v", err)
@@ -340,7 +339,7 @@ func TestSearchService_GetRelevantExamples(t *testing.T) {
 }
 
 func TestSearchService_SearchByCategory(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	service, err := NewService(ctx, "test-project", SupportedRegion)
 	if err != nil {
 		t.Skipf("Skipping test due to credential error: %v", err)
@@ -372,7 +371,7 @@ func TestSearchService_SearchByCategory(t *testing.T) {
 }
 
 func TestSearchService_SearchByDifficulty(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	service, err := NewService(ctx, "test-project", SupportedRegion)
 	if err != nil {
 		t.Skipf("Skipping test due to credential error: %v", err)
@@ -404,7 +403,7 @@ func TestSearchService_SearchByDifficulty(t *testing.T) {
 }
 
 func TestCalculateTextSimilarity(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	service, err := NewService(ctx, "test-project", SupportedRegion)
 	if err != nil {
 		t.Skipf("Skipping test due to credential error: %v", err)
@@ -480,7 +479,7 @@ func TestCalculateTextSimilarity(t *testing.T) {
 }
 
 func TestCalculateQualityScore(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	service, err := NewService(ctx, "test-project", SupportedRegion)
 	if err != nil {
 		t.Skipf("Skipping test due to credential error: %v", err)

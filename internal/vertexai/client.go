@@ -8,6 +8,9 @@ import (
 	"fmt"
 	"log/slog"
 
+	"cloud.google.com/go/auth/credentials"
+	"google.golang.org/api/option"
+
 	"github.com/go-a2a/adk-go/internal/vertexai/caching"
 	"github.com/go-a2a/adk-go/internal/vertexai/examplestore"
 	"github.com/go-a2a/adk-go/internal/vertexai/extension"
@@ -31,18 +34,18 @@ type Client struct {
 	logger    *slog.Logger
 
 	// Core services
-	cachingService      *caching.Service
-	exampleStoreService *examplestore.Service
-	generativeService   *generativemodel.Service
-	modelGardenService  *modelgarden.Service
-	extensionService    *extension.Service
-	promptsService      *prompt.Service
+	cachingService      caching.Service
+	exampleStoreService examplestore.Service
+	generativeService   generativemodel.Service
+	modelGardenService  modelgarden.Service
+	extensionService    extension.Service
+	promptsService      prompt.Service
 
 	// Previwe services
 	ragClient              *rag.Service
-	evaluationService      *evaluation.Service
-	reasoningengineService *reasoningengine.Service
-	tuningService          *tuning.Service
+	evaluationService      evaluation.Service
+	reasoningengineService reasoningengine.Service
+	tuningService          tuning.Service
 }
 
 // ClientOption is a functional option for configuring the client.
@@ -72,76 +75,86 @@ func NewClient(ctx context.Context, projectID, location string, opts ...ClientOp
 		logger:    slog.Default(),
 	}
 
+	// Create credentials
+	creds, err := credentials.DetectDefault(&credentials.DetectOptions{
+		Scopes: []string{
+			"https://www.googleapis.com/auth/cloud-platform",
+		},
+	})
+	if err != nil {
+		return nil, fmt.Errorf("failed to detect default credentials: %w", err)
+	}
+
 	// Apply options
 	for _, opt := range opts {
 		opt(client)
 	}
 
 	// Initialize caching service
-	cacheService, err := caching.NewService(ctx, projectID, location, caching.WithLogger(client.logger))
+	cacheService, err := caching.NewService(ctx, projectID, location, option.WithAuthCredentials(creds))
 	if err != nil {
 		return nil, fmt.Errorf("failed to initialize caching service: %w", err)
 	}
 	client.cachingService = cacheService
 
 	// Initialize example store service
-	exampleStoreService, err := examplestore.NewService(ctx, projectID, location, examplestore.WithLogger(client.logger))
+	exampleStoreService, err := examplestore.NewService(ctx, projectID, location, option.WithAuthCredentials(creds))
 	if err != nil {
 		return nil, fmt.Errorf("failed to initialize example store service: %w", err)
 	}
 	client.exampleStoreService = exampleStoreService
 
 	// Initialize generative models service
-	generativeService, err := generativemodel.NewService(ctx, projectID, location, generativemodel.WithLogger(client.logger))
+	generativeService, err := generativemodel.NewService(ctx, projectID, location, option.WithAuthCredentials(creds))
 	if err != nil {
 		return nil, fmt.Errorf("failed to initialize generative model service: %w", err)
 	}
 	client.generativeService = generativeService
 
 	// Initialize Model Garden service
-	modelGardenService, err := modelgarden.NewService(ctx, projectID, location, modelgarden.WithLogger(client.logger))
+	modelGardenService, err := modelgarden.NewService(ctx, projectID, location, option.WithAuthCredentials(creds))
 	if err != nil {
 		return nil, fmt.Errorf("failed to initialize Model Garden service: %w", err)
 	}
 	client.modelGardenService = modelGardenService
 
 	// Initialize Extension service
-	extensionService, err := extension.NewService(ctx, projectID, location, extension.WithLogger(client.logger))
+	extensionService, err := extension.NewService(ctx, projectID, location, option.WithAuthCredentials(creds))
 	if err != nil {
 		return nil, fmt.Errorf("failed to initialize Extension service: %w", err)
 	}
 	client.extensionService = extensionService
 
 	// Initialize Prompts service
-	promptsService, err := prompt.NewService(ctx, projectID, location, prompt.WithLogger(client.logger))
+	promptsService, err := prompt.NewService(ctx, projectID, location, option.WithAuthCredentials(creds))
 	if err != nil {
 		return nil, fmt.Errorf("failed to initialize Prompt service: %w", err)
 	}
 	client.promptsService = promptsService
 
 	// Initialize RAG client
-	ragClient, err := rag.NewService(ctx, projectID, location, rag.WithLogger(client.logger))
+	ragClient, err := rag.NewService(ctx, projectID, location, option.WithAuthCredentials(creds))
 	if err != nil {
 		return nil, fmt.Errorf("failed to initialize RAG client: %w", err)
 	}
 	client.ragClient = ragClient
 
 	// Initialize Evaluation Service
-	evaluationService, err := evaluation.NewService(ctx, projectID, location, evaluation.WithLogger(client.logger))
+	evaluationService, err := evaluation.NewService(ctx, projectID, location, option.WithAuthCredentials(creds))
 	if err != nil {
 		return nil, fmt.Errorf("failed to initialize Evaluation service: %w", err)
 	}
 	client.evaluationService = evaluationService
 
 	// Initialize Reasoning Engine Service
-	reasoningengineService, err := reasoningengine.NewService(ctx, projectID, location, reasoningengine.WithLogger(client.logger))
+	reasoningengineService, err := reasoningengine.NewService(ctx, projectID, location, option.WithAuthCredentials(creds))
 	if err != nil {
 		return nil, fmt.Errorf("failed to initialize Reasoning Engine service: %w", err)
 	}
 	client.reasoningengineService = reasoningengineService
 
 	// Initialize Tuning Service
-	tuningService, err := tuning.NewService(ctx, projectID, location, tuning.WithLogger(client.logger))
+	tuningService, err := tuning.NewService(ctx, projectID, location, option.WithAuthCredentials(creds))
 	if err != nil {
 		return nil, fmt.Errorf("failed to initialize Reasoning Engine service: %w", err)
 	}
@@ -243,7 +256,7 @@ func (c *Client) GetLogger() *slog.Logger {
 //
 // The content caching service provides optimized caching for large content
 // contexts, reducing token usage and improving performance for repeated queries.
-func (c *Client) Caching() *caching.Service {
+func (c *Client) Caching() caching.Service {
 	return c.cachingService
 }
 
@@ -251,7 +264,7 @@ func (c *Client) Caching() *caching.Service {
 //
 // The example store service provides functionality for managing Example Stores,
 // uploading examples, and performing similarity-based retrieval for few-shot learning.
-func (c *Client) ExampleStore() *examplestore.Service {
+func (c *Client) ExampleStore() examplestore.Service {
 	return c.exampleStoreService
 }
 
@@ -259,7 +272,7 @@ func (c *Client) ExampleStore() *examplestore.Service {
 //
 // This service provides access to features for generative AI models,
 // including advanced configuration options and experimental capabilities.
-func (c *Client) GenerativeModel() *generativemodel.Service {
+func (c *Client) GenerativeModel() generativemodel.Service {
 	return c.generativeService
 }
 
@@ -267,7 +280,7 @@ func (c *Client) GenerativeModel() *generativemodel.Service {
 //
 // The Model Garden service provides access to experimental and community models,
 // including deployment and management capabilities.
-func (c *Client) ModelGarden() *modelgarden.Service {
+func (c *Client) ModelGarden() modelgarden.Service {
 	return c.modelGardenService
 }
 
@@ -275,7 +288,7 @@ func (c *Client) ModelGarden() *modelgarden.Service {
 //
 // The Extension service provides access to Vertex AI Extension functionality,
 // including creating, managing, and executing both custom and prebuilt extensions.
-func (c *Client) Extension() *extension.Service {
+func (c *Client) Extension() extension.Service {
 	return c.extensionService
 }
 
@@ -283,7 +296,7 @@ func (c *Client) Extension() *extension.Service {
 //
 // The Prompt service provides comprehensive prompt management functionality,
 // including creation, versioning, template processing, and cloud storage integration.
-func (c *Client) Prompt() *prompt.Service {
+func (c *Client) Prompt() prompt.Service {
 	return c.promptsService
 }
 
@@ -296,17 +309,17 @@ func (c *Client) RAG() *rag.Service {
 }
 
 // Evaluation returns the Evaluation client
-func (c *Client) Evaluation() *evaluation.Service {
+func (c *Client) Evaluation() evaluation.Service {
 	return c.evaluationService
 }
 
 // ReasoningEngine returns the Reasoning Engine client.
-func (c *Client) ReasoningEngine() *reasoningengine.Service {
+func (c *Client) ReasoningEngine() reasoningengine.Service {
 	return c.reasoningengineService
 }
 
 // Tuning returns the Tuning client.
-func (c *Client) Tuning() *tuning.Service {
+func (c *Client) Tuning() tuning.Service {
 	return c.tuningService
 }
 

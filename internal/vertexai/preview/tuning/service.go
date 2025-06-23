@@ -11,7 +11,6 @@ import (
 	"time"
 
 	aiplatform "cloud.google.com/go/aiplatform/apiv1beta1"
-	"cloud.google.com/go/auth/credentials"
 	"google.golang.org/api/option"
 )
 
@@ -20,7 +19,21 @@ import (
 // The service manages fine-tuning jobs, hyperparameter optimization, and model deployment.
 // It supports various tuning methods including LoRA, QLoRA, and full fine-tuning with
 // comprehensive evaluation and monitoring capabilities.
-type Service struct {
+type Service interface {
+	CreateTuningJob(ctx context.Context, name string, config *TuningConfig) (*TuningJob, error)
+	GetTuningJob(ctx context.Context, name string) (*TuningJob, error)
+	ListTuningJobs(ctx context.Context, opts *ListOptions) ([]*TuningJob, error)
+	CancelTuningJob(ctx context.Context, name string) error
+	WaitForCompletion(ctx context.Context, name string, timeout time.Duration) error
+	GetTrainingProgress(ctx context.Context, name string) (*TrainingProgress, error)
+	GetTunedModel(ctx context.Context, jobName string) (*TunedModel, error)
+	DeployModel(ctx context.Context, modelName string, config *DeploymentConfig) (*Endpoint, error)
+	Predict(ctx context.Context, endpointName string, request *PredictRequest) (*PredictResponse, error)
+	CreateHyperparameterTuningJob(ctx context.Context, name string, baseConfig *TuningConfig, hpConfig *HyperparameterOptimizationConfig) (*TuningJob, error)
+	Close() error
+}
+
+type service struct {
 	client    *aiplatform.PredictionClient
 	projectID string
 	location  string
@@ -39,15 +52,7 @@ type Service struct {
 	endpointsMu sync.RWMutex
 }
 
-// ServiceOption is a functional option for configuring the tuning service.
-type ServiceOption func(*Service)
-
-// WithLogger sets a custom logger for the service.
-func WithLogger(logger *slog.Logger) ServiceOption {
-	return func(s *Service) {
-		s.logger = logger
-	}
-}
+var _ Service = (*service)(nil)
 
 // NewService creates a new tuning service.
 //
@@ -61,7 +66,7 @@ func WithLogger(logger *slog.Logger) ServiceOption {
 //   - opts: Optional configuration options
 //
 // Returns a fully initialized tuning service or an error if initialization fails.
-func NewService(ctx context.Context, projectID, location string, opts ...ServiceOption) (*Service, error) {
+func NewService(ctx context.Context, projectID, location string, opts ...option.ClientOption) (*service, error) {
 	if projectID == "" {
 		return nil, fmt.Errorf("projectID is required")
 	}
@@ -69,7 +74,7 @@ func NewService(ctx context.Context, projectID, location string, opts ...Service
 		return nil, fmt.Errorf("location is required")
 	}
 
-	service := &Service{
+	service := &service{
 		projectID: projectID,
 		location:  location,
 		logger:    slog.Default(),
@@ -78,23 +83,8 @@ func NewService(ctx context.Context, projectID, location string, opts ...Service
 		endpoints: make(map[string]*Endpoint),
 	}
 
-	// Apply options
-	for _, opt := range opts {
-		opt(service)
-	}
-
-	// Create credentials
-	creds, err := credentials.DetectDefault(&credentials.DetectOptions{
-		Scopes: []string{
-			"https://www.googleapis.com/auth/cloud-platform",
-		},
-	})
-	if err != nil {
-		return nil, fmt.Errorf("failed to detect credentials: %w", err)
-	}
-
 	// Create AI Platform client
-	client, err := aiplatform.NewPredictionClient(ctx, option.WithAuthCredentials(creds))
+	client, err := aiplatform.NewPredictionClient(ctx, opts...)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create prediction client: %w", err)
 	}
@@ -109,7 +99,7 @@ func NewService(ctx context.Context, projectID, location string, opts ...Service
 }
 
 // Close closes the tuning service and releases all resources.
-func (s *Service) Close() error {
+func (s *service) Close() error {
 	s.logger.Info("Closing tuning service")
 
 	if s.client != nil {
@@ -134,7 +124,7 @@ func (s *Service) Close() error {
 //   - config: Tuning configuration including dataset, hyperparameters, and method
 //
 // Returns the created tuning job or an error if creation fails.
-func (s *Service) CreateTuningJob(ctx context.Context, name string, config *TuningConfig) (*TuningJob, error) {
+func (s *service) CreateTuningJob(ctx context.Context, name string, config *TuningConfig) (*TuningJob, error) {
 	s.logger.InfoContext(ctx, "Creating tuning job",
 		slog.String("name", name),
 		slog.String("source_model", config.SourceModel),
@@ -190,7 +180,7 @@ func (s *Service) CreateTuningJob(ctx context.Context, name string, config *Tuni
 }
 
 // GetTuningJob retrieves information about a tuning job.
-func (s *Service) GetTuningJob(ctx context.Context, name string) (*TuningJob, error) {
+func (s *service) GetTuningJob(ctx context.Context, name string) (*TuningJob, error) {
 	s.jobsMu.RLock()
 	job, exists := s.jobs[name]
 	s.jobsMu.RUnlock()
@@ -214,7 +204,7 @@ func (s *Service) GetTuningJob(ctx context.Context, name string) (*TuningJob, er
 }
 
 // ListTuningJobs lists all tuning jobs with optional filtering.
-func (s *Service) ListTuningJobs(ctx context.Context, opts *ListOptions) ([]*TuningJob, error) {
+func (s *service) ListTuningJobs(ctx context.Context, opts *ListOptions) ([]*TuningJob, error) {
 	s.jobsMu.RLock()
 	defer s.jobsMu.RUnlock()
 
@@ -243,10 +233,7 @@ func (s *Service) ListTuningJobs(ctx context.Context, opts *ListOptions) ([]*Tun
 			// In a real implementation, decode the page token
 		}
 
-		end := start + opts.PageSize
-		if end > len(jobs) {
-			end = len(jobs)
-		}
+		end := min(start+opts.PageSize, len(jobs))
 
 		if start < len(jobs) {
 			jobs = jobs[start:end]
@@ -259,7 +246,7 @@ func (s *Service) ListTuningJobs(ctx context.Context, opts *ListOptions) ([]*Tun
 }
 
 // CancelTuningJob cancels a running tuning job.
-func (s *Service) CancelTuningJob(ctx context.Context, name string) error {
+func (s *service) CancelTuningJob(ctx context.Context, name string) error {
 	s.jobsMu.Lock()
 	defer s.jobsMu.Unlock()
 
@@ -283,7 +270,7 @@ func (s *Service) CancelTuningJob(ctx context.Context, name string) error {
 }
 
 // WaitForCompletion waits for a tuning job to complete.
-func (s *Service) WaitForCompletion(ctx context.Context, name string, timeout time.Duration) error {
+func (s *service) WaitForCompletion(ctx context.Context, name string, timeout time.Duration) error {
 	deadline := time.Now().Add(timeout)
 
 	for time.Now().Before(deadline) {
@@ -314,7 +301,7 @@ func (s *Service) WaitForCompletion(ctx context.Context, name string, timeout ti
 }
 
 // GetTrainingProgress retrieves the current training progress for a job.
-func (s *Service) GetTrainingProgress(ctx context.Context, name string) (*TrainingProgress, error) {
+func (s *service) GetTrainingProgress(ctx context.Context, name string) (*TrainingProgress, error) {
 	job, err := s.GetTuningJob(ctx, name)
 	if err != nil {
 		return nil, err
@@ -330,7 +317,7 @@ func (s *Service) GetTrainingProgress(ctx context.Context, name string) (*Traini
 }
 
 // GetTunedModel retrieves the fine-tuned model from a completed job.
-func (s *Service) GetTunedModel(ctx context.Context, jobName string) (*TunedModel, error) {
+func (s *service) GetTunedModel(ctx context.Context, jobName string) (*TunedModel, error) {
 	job, err := s.GetTuningJob(ctx, jobName)
 	if err != nil {
 		return nil, err
@@ -350,7 +337,7 @@ func (s *Service) GetTunedModel(ctx context.Context, jobName string) (*TunedMode
 }
 
 // DeployModel deploys a fine-tuned model to an endpoint.
-func (s *Service) DeployModel(ctx context.Context, modelName string, config *DeploymentConfig) (*Endpoint, error) {
+func (s *service) DeployModel(ctx context.Context, modelName string, config *DeploymentConfig) (*Endpoint, error) {
 	s.logger.InfoContext(ctx, "Deploying model",
 		slog.String("model", modelName),
 		slog.String("machine_type", config.MachineType),
@@ -401,7 +388,7 @@ func (s *Service) DeployModel(ctx context.Context, modelName string, config *Dep
 }
 
 // Predict makes a prediction using a deployed model.
-func (s *Service) Predict(ctx context.Context, endpointName string, request *PredictRequest) (*PredictResponse, error) {
+func (s *service) Predict(ctx context.Context, endpointName string, request *PredictRequest) (*PredictResponse, error) {
 	s.endpointsMu.RLock()
 	endpoint, exists := s.endpoints[endpointName]
 	s.endpointsMu.RUnlock()
@@ -431,7 +418,7 @@ func (s *Service) Predict(ctx context.Context, endpointName string, request *Pre
 }
 
 // CreateHyperparameterTuningJob creates a hyperparameter optimization job.
-func (s *Service) CreateHyperparameterTuningJob(ctx context.Context, name string, baseConfig *TuningConfig, hpConfig *HyperparameterOptimizationConfig) (*TuningJob, error) {
+func (s *service) CreateHyperparameterTuningJob(ctx context.Context, name string, baseConfig *TuningConfig, hpConfig *HyperparameterOptimizationConfig) (*TuningJob, error) {
 	s.logger.InfoContext(ctx, "Creating hyperparameter tuning job",
 		slog.String("name", name),
 		slog.Int("max_trials", hpConfig.MaxTrials),
@@ -471,7 +458,7 @@ func (s *Service) CreateHyperparameterTuningJob(ctx context.Context, name string
 }
 
 // validateConfig validates the tuning configuration.
-func (s *Service) validateConfig(config *TuningConfig) error {
+func (s *service) validateConfig(config *TuningConfig) error {
 	if config.SourceModel == "" {
 		return fmt.Errorf("source model is required")
 	}
@@ -514,7 +501,7 @@ func (s *Service) validateConfig(config *TuningConfig) error {
 }
 
 // validateLoRAConfig validates LoRA configuration.
-func (s *Service) validateLoRAConfig(config *LoRAConfig) error {
+func (s *service) validateLoRAConfig(config *LoRAConfig) error {
 	if config.Rank <= 0 {
 		return fmt.Errorf("LoRA rank must be positive")
 	}
@@ -535,7 +522,7 @@ func (s *Service) validateLoRAConfig(config *LoRAConfig) error {
 }
 
 // validateHyperparameterConfig validates hyperparameter optimization configuration.
-func (s *Service) validateHyperparameterConfig(config *HyperparameterOptimizationConfig) error {
+func (s *service) validateHyperparameterConfig(config *HyperparameterOptimizationConfig) error {
 	if len(config.ParameterSpecs) == 0 {
 		return fmt.Errorf("at least one parameter spec is required")
 	}
@@ -556,7 +543,7 @@ func (s *Service) validateHyperparameterConfig(config *HyperparameterOptimizatio
 }
 
 // runTuningJob simulates running a tuning job.
-func (s *Service) runTuningJob(ctx context.Context, job *TuningJob) {
+func (s *service) runTuningJob(ctx context.Context, job *TuningJob) {
 	s.logger.InfoContext(ctx, "Starting tuning job execution",
 		slog.String("name", job.Name),
 		slog.String("method", string(job.Config.TuningMethod)),
@@ -636,7 +623,7 @@ func (s *Service) runTuningJob(ctx context.Context, job *TuningJob) {
 }
 
 // simulateEpochTraining simulates training for one epoch.
-func (s *Service) simulateEpochTraining(job *TuningJob, epoch, totalEpochs int) {
+func (s *service) simulateEpochTraining(job *TuningJob, epoch, totalEpochs int) {
 	s.jobsMu.Lock()
 	defer s.jobsMu.Unlock()
 
@@ -659,6 +646,9 @@ func (s *Service) simulateEpochTraining(job *TuningJob, epoch, totalEpochs int) 
 
 	// Simulate learning rate decay
 	baseLR := 2e-4
+	if job.Config == nil {
+		job.Config = &TuningConfig{}
+	}
 	if job.Config.Hyperparameters != nil && job.Config.Hyperparameters.LearningRate > 0 {
 		baseLR = job.Config.Hyperparameters.LearningRate
 	}
@@ -678,7 +668,7 @@ func (s *Service) simulateEpochTraining(job *TuningJob, epoch, totalEpochs int) 
 }
 
 // runHyperparameterTuning simulates hyperparameter optimization.
-func (s *Service) runHyperparameterTuning(ctx context.Context, job *TuningJob, hpConfig *HyperparameterOptimizationConfig) {
+func (s *service) runHyperparameterTuning(ctx context.Context, job *TuningJob, hpConfig *HyperparameterOptimizationConfig) {
 	s.logger.InfoContext(ctx, "Starting hyperparameter tuning",
 		slog.String("name", job.Name),
 		slog.Int("max_trials", hpConfig.MaxTrials),
@@ -739,7 +729,7 @@ func (s *Service) runHyperparameterTuning(ctx context.Context, job *TuningJob, h
 }
 
 // simulateTrial simulates a single hyperparameter trial.
-func (s *Service) simulateTrial(hpConfig *HyperparameterOptimizationConfig) float64 {
+func (s *service) simulateTrial(hpConfig *HyperparameterOptimizationConfig) float64 {
 	// Generate random metric value based on the objective
 	if hpConfig.Objective == "minimize" {
 		return 0.1 + (0.5 * (1.0 - 0.5)) // Random value between 0.1 and 0.6
@@ -748,7 +738,7 @@ func (s *Service) simulateTrial(hpConfig *HyperparameterOptimizationConfig) floa
 }
 
 // updateJobState updates the job state safely.
-func (s *Service) updateJobState(job *TuningJob, state TuningJobState, errorMsg string) {
+func (s *service) updateJobState(job *TuningJob, state TuningJobState, errorMsg string) {
 	s.jobsMu.Lock()
 	defer s.jobsMu.Unlock()
 
@@ -765,7 +755,7 @@ func (s *Service) updateJobState(job *TuningJob, state TuningJobState, errorMsg 
 }
 
 // matchesJobFilter checks if a job matches the given filter.
-func (s *Service) matchesJobFilter(job *TuningJob, filter string) bool {
+func (s *service) matchesJobFilter(job *TuningJob, filter string) bool {
 	// Simple filter implementation
 	switch filter {
 	case "state=RUNNING":

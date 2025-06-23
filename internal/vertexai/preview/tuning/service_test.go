@@ -4,7 +4,6 @@
 package tuning
 
 import (
-	"context"
 	"fmt"
 	"testing"
 	"time"
@@ -41,7 +40,7 @@ func TestNewService(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			ctx := context.Background()
+			ctx := t.Context()
 			service, err := NewService(ctx, tt.projectID, tt.location)
 
 			if (err != nil) != tt.wantErr {
@@ -73,7 +72,7 @@ func TestNewService(t *testing.T) {
 }
 
 func TestService_validateConfig(t *testing.T) {
-	service := &Service{}
+	service := &service{}
 
 	tests := []struct {
 		name    string
@@ -188,7 +187,7 @@ func TestService_validateConfig(t *testing.T) {
 }
 
 func TestService_validateLoRAConfig(t *testing.T) {
-	service := &Service{}
+	service := &service{}
 
 	tests := []struct {
 		name    string
@@ -262,7 +261,7 @@ func TestService_validateLoRAConfig(t *testing.T) {
 }
 
 func TestService_CreateTuningJob(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	service, err := NewService(ctx, "test-project", "us-central1")
 	if err != nil {
 		t.Fatalf("Failed to create service: %v", err)
@@ -307,7 +306,7 @@ func TestService_CreateTuningJob(t *testing.T) {
 }
 
 func TestService_GetTuningJob(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	service, err := NewService(ctx, "test-project", "us-central1")
 	if err != nil {
 		t.Fatalf("Failed to create service: %v", err)
@@ -346,7 +345,7 @@ func TestService_GetTuningJob(t *testing.T) {
 }
 
 func TestService_ListTuningJobs(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	service, err := NewService(ctx, "test-project", "us-central1")
 	if err != nil {
 		t.Fatalf("Failed to create service: %v", err)
@@ -420,7 +419,7 @@ func TestService_ListTuningJobs(t *testing.T) {
 }
 
 func TestService_CancelTuningJob(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	service, err := NewService(ctx, "test-project", "us-central1")
 	if err != nil {
 		t.Fatalf("Failed to create service: %v", err)
@@ -460,7 +459,7 @@ func TestService_CancelTuningJob(t *testing.T) {
 }
 
 func TestService_WaitForCompletion(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	service, err := NewService(ctx, "test-project", "us-central1")
 	if err != nil {
 		t.Fatalf("Failed to create service: %v", err)
@@ -501,7 +500,7 @@ func TestService_WaitForCompletion(t *testing.T) {
 }
 
 func TestService_GetTrainingProgress(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	service, err := NewService(ctx, "test-project", "us-central1")
 	if err != nil {
 		t.Fatalf("Failed to create service: %v", err)
@@ -542,7 +541,7 @@ func TestService_GetTrainingProgress(t *testing.T) {
 }
 
 func TestService_CreateHyperparameterTuningJob(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	service, err := NewService(ctx, "test-project", "us-central1")
 	if err != nil {
 		t.Fatalf("Failed to create service: %v", err)
@@ -708,7 +707,7 @@ func TestNewDatasetConfig(t *testing.T) {
 }
 
 func TestService_simulateEpochTraining(t *testing.T) {
-	service := &Service{}
+	service := &service{}
 
 	job := &TuningJob{
 		Name:             "test-job",
@@ -749,7 +748,7 @@ func TestService_simulateEpochTraining(t *testing.T) {
 }
 
 func TestService_matchesJobFilter(t *testing.T) {
-	service := &Service{}
+	service := &service{}
 
 	tests := []struct {
 		name     string
@@ -813,7 +812,7 @@ func TestService_matchesJobFilter(t *testing.T) {
 
 // Benchmark tests
 func BenchmarkService_CreateTuningJob(b *testing.B) {
-	ctx := context.Background()
+	ctx := b.Context()
 	service, err := NewService(ctx, "test-project", "us-central1")
 	if err != nil {
 		b.Fatalf("Failed to create service: %v", err)
@@ -823,8 +822,7 @@ func BenchmarkService_CreateTuningJob(b *testing.B) {
 	config := NewTuningConfig("gemini-2.0-flash-001", MethodSFT)
 	config.Dataset = NewDatasetConfig("gs://test-bucket/train.jsonl", DataFormatJSONL)
 
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+	for i := 0; b.Loop(); i++ {
 		jobName := fmt.Sprintf("bench-job-%d", i)
 		_, err := service.CreateTuningJob(ctx, jobName, config)
 		if err != nil {
@@ -834,15 +832,14 @@ func BenchmarkService_CreateTuningJob(b *testing.B) {
 }
 
 func BenchmarkService_simulateEpochTraining(b *testing.B) {
-	service := &Service{}
+	service := &service{}
 	job := &TuningJob{
 		Name:             "bench-job",
 		StartTime:        time.Now(),
 		TrainingProgress: &TrainingProgress{},
 	}
 
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		service.simulateEpochTraining(job, 1, 3)
 	}
 }
@@ -851,7 +848,7 @@ func BenchmarkService_simulateEpochTraining(b *testing.B) {
 func TestService_Integration(t *testing.T) {
 	t.Skip("Integration test requires API keys - enable manually for testing")
 
-	ctx := context.Background()
+	ctx := t.Context()
 	service, err := NewService(ctx, "your-project-id", "us-central1")
 	if err != nil {
 		t.Fatalf("Failed to create service: %v", err)

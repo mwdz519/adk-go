@@ -7,10 +7,10 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
+	"slices"
 	"time"
 
 	aiplatform "cloud.google.com/go/aiplatform/apiv1beta1"
-	"cloud.google.com/go/auth/credentials"
 	"google.golang.org/api/option"
 
 	"github.com/go-a2a/adk-go/types"
@@ -21,22 +21,47 @@ import (
 // The service enables discovery, deployment, and management of experimental
 // and community models from Model Garden, extending beyond standard Vertex AI
 // model offerings.
-type Service struct {
+type Service interface {
+	GetProjectID() string
+
+	GetLocation() string
+
+	// ListModels lists available models in Model Garden.
+	ListModels(ctx context.Context, opts *ListModelsOptions) (*ListModelsResponse, error)
+
+	// GetModel retrieves detailed information about a specific model.
+	GetModel(ctx context.Context, modelName string) (*ModelInfo, error)
+
+	// DeployModel deploys a model from Model Garden.
+	DeployModel(ctx context.Context, req *DeployModelRequest) (*DeploymentInfo, error)
+
+	// GetDeployment retrieves information about a specific deployment.
+	GetDeployment(ctx context.Context, deploymentName string) (*DeploymentInfo, error)
+
+	// ListDeployments lists all deployments.
+	ListDeployments(ctx context.Context, opts *ListDeploymentsOptions) (*ListDeploymentsResponse, error)
+
+	// GetDeployedModel returns a model interface for a deployed model.
+	GetDeployedModel(ctx context.Context, deploymentName string) (types.Model, error)
+
+	// UpdateDeployment updates an existing deployment.
+	UpdateDeployment(ctx context.Context, deploymentName string, config *DeploymentConfig) (*DeploymentInfo, error)
+
+	// DeleteDeployment deletes a deployment.
+	DeleteDeployment(ctx context.Context, deploymentName string) error
+
+	// Close closes the service and releases resources.
+	Close() error
+}
+
+type service struct {
 	predictionClient *aiplatform.PredictionClient
 	projectID        string
 	location         string
 	logger           *slog.Logger
 }
 
-// ServiceOption is a functional option for configuring the Model Garden service.
-type ServiceOption func(*Service)
-
-// WithLogger sets a custom logger for the service.
-func WithLogger(logger *slog.Logger) ServiceOption {
-	return func(s *Service) {
-		s.logger = logger
-	}
-}
+var _ Service = (*service)(nil)
 
 // NewService creates a new Model Garden service.
 //
@@ -50,7 +75,7 @@ func WithLogger(logger *slog.Logger) ServiceOption {
 //   - opts: Optional configuration options
 //
 // Returns a configured service instance or an error if initialization fails.
-func NewService(ctx context.Context, projectID, location string, opts ...ServiceOption) (*Service, error) {
+func NewService(ctx context.Context, projectID, location string, opts ...option.ClientOption) (*service, error) {
 	if projectID == "" {
 		return nil, fmt.Errorf("projectID is required")
 	}
@@ -58,29 +83,14 @@ func NewService(ctx context.Context, projectID, location string, opts ...Service
 		return nil, fmt.Errorf("location is required")
 	}
 
-	service := &Service{
+	service := &service{
 		projectID: projectID,
 		location:  location,
 		logger:    slog.Default(),
 	}
 
-	// Apply options
-	for _, opt := range opts {
-		opt(service)
-	}
-
-	// Create credentials
-	creds, err := credentials.DetectDefault(&credentials.DetectOptions{
-		Scopes: []string{
-			"https://www.googleapis.com/auth/cloud-platform",
-		},
-	})
-	if err != nil {
-		return nil, fmt.Errorf("failed to detect default credentials: %w", err)
-	}
-
 	// Create prediction client for Model Garden operations
-	predictionClient, err := aiplatform.NewPredictionClient(ctx, option.WithAuthCredentials(creds))
+	predictionClient, err := aiplatform.NewPredictionClient(ctx, opts...)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create prediction client: %w", err)
 	}
@@ -95,7 +105,7 @@ func NewService(ctx context.Context, projectID, location string, opts ...Service
 }
 
 // Close closes the Model Garden service and releases resources.
-func (s *Service) Close() error {
+func (s *service) Close() error {
 	if s.predictionClient != nil {
 		if err := s.predictionClient.Close(); err != nil {
 			return fmt.Errorf("failed to close prediction client: %w", err)
@@ -117,7 +127,7 @@ func (s *Service) Close() error {
 //   - opts: Options for filtering and pagination
 //
 // Returns a list of available models with metadata.
-func (s *Service) ListModels(ctx context.Context, opts *ListModelsOptions) (*ListModelsResponse, error) {
+func (s *service) ListModels(ctx context.Context, opts *ListModelsOptions) (*ListModelsResponse, error) {
 	if opts == nil {
 		opts = &ListModelsOptions{PageSize: 50}
 	}
@@ -250,7 +260,7 @@ func (s *Service) ListModels(ctx context.Context, opts *ListModelsOptions) (*Lis
 //   - modelName: Full resource name of the model
 //
 // Returns detailed model information or an error if not found.
-func (s *Service) GetModel(ctx context.Context, modelName string) (*ModelInfo, error) {
+func (s *service) GetModel(ctx context.Context, modelName string) (*ModelInfo, error) {
 	if modelName == "" {
 		return nil, fmt.Errorf("model name cannot be empty")
 	}
@@ -329,7 +339,7 @@ func (s *Service) GetModel(ctx context.Context, modelName string) (*ModelInfo, e
 //   - req: Deployment request with configuration
 //
 // Returns deployment information or an error if deployment fails.
-func (s *Service) DeployModel(ctx context.Context, req *DeployModelRequest) (*DeploymentInfo, error) {
+func (s *service) DeployModel(ctx context.Context, req *DeployModelRequest) (*DeploymentInfo, error) {
 	if req == nil {
 		return nil, fmt.Errorf("request cannot be nil")
 	}
@@ -392,7 +402,7 @@ func (s *Service) DeployModel(ctx context.Context, req *DeployModelRequest) (*De
 //   - deploymentName: Full resource name of the deployment
 //
 // Returns deployment information or an error if not found.
-func (s *Service) GetDeployment(ctx context.Context, deploymentName string) (*DeploymentInfo, error) {
+func (s *service) GetDeployment(ctx context.Context, deploymentName string) (*DeploymentInfo, error) {
 	if deploymentName == "" {
 		return nil, fmt.Errorf("deployment name cannot be empty")
 	}
@@ -442,7 +452,7 @@ func (s *Service) GetDeployment(ctx context.Context, deploymentName string) (*De
 //   - opts: Options for filtering and pagination
 //
 // Returns a list of deployments with their status and configuration.
-func (s *Service) ListDeployments(ctx context.Context, opts *ListDeploymentsOptions) (*ListDeploymentsResponse, error) {
+func (s *service) ListDeployments(ctx context.Context, opts *ListDeploymentsOptions) (*ListDeploymentsResponse, error) {
 	if opts == nil {
 		opts = &ListDeploymentsOptions{PageSize: 50}
 	}
@@ -498,7 +508,7 @@ func (s *Service) ListDeployments(ctx context.Context, opts *ListDeploymentsOpti
 //   - deploymentName: Full resource name of the deployment
 //
 // Returns a model interface for inference or an error if not available.
-func (s *Service) GetDeployedModel(ctx context.Context, deploymentName string) (types.Model, error) {
+func (s *service) GetDeployedModel(ctx context.Context, deploymentName string) (types.Model, error) {
 	if deploymentName == "" {
 		return nil, fmt.Errorf("deployment name cannot be empty")
 	}
@@ -522,7 +532,7 @@ func (s *Service) GetDeployedModel(ctx context.Context, deploymentName string) (
 //   - config: Updated deployment configuration
 //
 // Returns updated deployment information or an error.
-func (s *Service) UpdateDeployment(ctx context.Context, deploymentName string, config *DeploymentConfig) (*DeploymentInfo, error) {
+func (s *service) UpdateDeployment(ctx context.Context, deploymentName string, config *DeploymentConfig) (*DeploymentInfo, error) {
 	if deploymentName == "" {
 		return nil, fmt.Errorf("deployment name cannot be empty")
 	}
@@ -559,7 +569,7 @@ func (s *Service) UpdateDeployment(ctx context.Context, deploymentName string, c
 //   - deploymentName: Full resource name of the deployment to delete
 //
 // Returns an error if the deletion fails.
-func (s *Service) DeleteDeployment(ctx context.Context, deploymentName string) error {
+func (s *service) DeleteDeployment(ctx context.Context, deploymentName string) error {
 	if deploymentName == "" {
 		return fmt.Errorf("deployment name cannot be empty")
 	}
@@ -581,7 +591,7 @@ func (s *Service) DeleteDeployment(ctx context.Context, deploymentName string) e
 // Helper Methods
 
 // filterModels applies filters to a list of models.
-func (s *Service) filterModels(models []*ModelInfo, opts *ListModelsOptions) []*ModelInfo {
+func (s *service) filterModels(models []*ModelInfo, opts *ListModelsOptions) []*ModelInfo {
 	filtered := make([]*ModelInfo, 0, len(models))
 
 	for _, model := range models {
@@ -604,13 +614,7 @@ func (s *Service) filterModels(models []*ModelInfo, opts *ListModelsOptions) []*
 		if len(opts.Tags) > 0 {
 			hasAllTags := true
 			for _, requiredTag := range opts.Tags {
-				found := false
-				for _, modelTag := range model.Tags {
-					if modelTag == requiredTag {
-						found = true
-						break
-					}
-				}
+				found := slices.Contains(model.Tags, requiredTag)
 				if !found {
 					hasAllTags = false
 					break
@@ -628,28 +632,28 @@ func (s *Service) filterModels(models []*ModelInfo, opts *ListModelsOptions) []*
 }
 
 // generateDeploymentName generates a fully qualified deployment name.
-func (s *Service) generateDeploymentName(deploymentID string) string {
+func (s *service) generateDeploymentName(deploymentID string) string {
 	return fmt.Sprintf("projects/%s/locations/%s/endpoints/%s/deployedModels/%s",
 		s.projectID, s.location, deploymentID+"-endpoint", deploymentID)
 }
 
 // generateEndpointName generates a fully qualified endpoint name.
-func (s *Service) generateEndpointName(endpointID string) string {
+func (s *service) generateEndpointName(endpointID string) string {
 	return fmt.Sprintf("projects/%s/locations/%s/endpoints/%s",
 		s.projectID, s.location, endpointID)
 }
 
 // GetProjectID returns the configured project ID.
-func (s *Service) GetProjectID() string {
+func (s *service) GetProjectID() string {
 	return s.projectID
 }
 
 // GetLocation returns the configured location.
-func (s *Service) GetLocation() string {
+func (s *service) GetLocation() string {
 	return s.location
 }
 
 // GetLogger returns the configured logger.
-func (s *Service) GetLogger() *slog.Logger {
+func (s *service) GetLogger() *slog.Logger {
 	return s.logger
 }

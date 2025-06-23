@@ -10,7 +10,6 @@ import (
 	"time"
 
 	aiplatform "cloud.google.com/go/aiplatform/apiv1beta1"
-	"cloud.google.com/go/auth/credentials"
 	"google.golang.org/api/option"
 	"google.golang.org/genai"
 )
@@ -20,22 +19,49 @@ import (
 // The service manages cached content lifecycle, including creation, retrieval,
 // updates, and deletion. It integrates with supported generative models to
 // optimize token usage for large content scenarios.
-type Service struct {
+type Service interface {
+	// GetProjectID returns the configured project ID.
+	GetProjectID() string
+
+	// GetLocation returns the configured location.
+	GetLocation() string
+
+	// GetParent returns the name of the Endpoint requested to serve the prediction.
+	GetParent() string
+
+	// CreateCache creates a new cached content entry.
+	CreateCache(ctx context.Context, content *genai.Content, config *CacheConfig) (*CachedContent, error)
+
+	// GetCache retrieves cached content by name.
+	GetCache(ctx context.Context, cacheName string) (*CachedContent, error)
+
+	// ListCaches lists all cached content in the project and location.
+	ListCaches(ctx context.Context, opts *ListCacheOptions) (*ListCacheResponse, error)
+
+	// UpdateCache updates existing cached content.
+	UpdateCache(ctx context.Context, cachedContent *CachedContent, updateMask []string) (*CachedContent, error)
+
+	// DeleteCache deletes cached content.
+	DeleteCache(ctx context.Context, cacheName string) error
+
+	// CreateCacheWithTTL creates cached content with a simple TTL configuration.
+	CreateCacheWithTTL(ctx context.Context, content *genai.Content, modelName, displayName string, ttl time.Duration) (*CachedContent, error)
+
+	// CreateCacheForModel creates cached content for a specific model with default settings.
+	CreateCacheForModel(ctx context.Context, content *genai.Content, modelName string) (*CachedContent, error)
+
+	// Close closes the content caching service and releases resources.
+	Close() error
+}
+
+type service struct {
 	client    *aiplatform.PredictionClient
 	projectID string
 	location  string
 	logger    *slog.Logger
 }
 
-// ServiceOption is a functional option for configuring the content caching service.
-type ServiceOption func(*Service)
-
-// WithLogger sets a custom logger for the service.
-func WithLogger(logger *slog.Logger) ServiceOption {
-	return func(s *Service) {
-		s.logger = logger
-	}
-}
+var _ Service = (*service)(nil)
 
 // NewService creates a new content caching service.
 //
@@ -49,7 +75,7 @@ func WithLogger(logger *slog.Logger) ServiceOption {
 //   - opts: Optional configuration options
 //
 // Returns a configured service instance or an error if initialization fails.
-func NewService(ctx context.Context, projectID, location string, opts ...ServiceOption) (*Service, error) {
+func NewService(ctx context.Context, projectID, location string, opts ...option.ClientOption) (*service, error) {
 	if projectID == "" {
 		return nil, fmt.Errorf("projectID is required")
 	}
@@ -57,29 +83,14 @@ func NewService(ctx context.Context, projectID, location string, opts ...Service
 		return nil, fmt.Errorf("location is required")
 	}
 
-	service := &Service{
+	service := &service{
 		projectID: projectID,
 		location:  location,
 		logger:    slog.Default(),
 	}
 
-	// Apply options
-	for _, opt := range opts {
-		opt(service)
-	}
-
-	// Create credentials
-	creds, err := credentials.DetectDefault(&credentials.DetectOptions{
-		Scopes: []string{
-			"https://www.googleapis.com/auth/cloud-platform",
-		},
-	})
-	if err != nil {
-		return nil, fmt.Errorf("failed to detect default credentials: %w", err)
-	}
-
 	// Create prediction service client for content caching
-	client, err := aiplatform.NewPredictionClient(ctx, option.WithAuthCredentials(creds))
+	client, err := aiplatform.NewPredictionClient(ctx, opts...)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create prediction service client: %w", err)
 	}
@@ -94,7 +105,7 @@ func NewService(ctx context.Context, projectID, location string, opts ...Service
 }
 
 // Close closes the content caching service and releases resources.
-func (s *Service) Close() error {
+func (s *service) Close() error {
 	if s.client != nil {
 		if err := s.client.Close(); err != nil {
 			return fmt.Errorf("failed to close prediction service client: %w", err)
@@ -117,7 +128,7 @@ func (s *Service) Close() error {
 //   - config: Cache configuration (must not be nil)
 //
 // Returns the created cached content or an error.
-func (s *Service) CreateCache(ctx context.Context, content *genai.Content, config *CacheConfig) (*CachedContent, error) {
+func (s *service) CreateCache(ctx context.Context, content *genai.Content, config *CacheConfig) (*CachedContent, error) {
 	if content == nil {
 		return nil, fmt.Errorf("content cannot be nil")
 	}
@@ -177,7 +188,7 @@ func (s *Service) CreateCache(ctx context.Context, content *genai.Content, confi
 //   - cacheName: Full resource name of the cached content
 //
 // Returns the cached content or an error if not found.
-func (s *Service) GetCache(ctx context.Context, cacheName string) (*CachedContent, error) {
+func (s *service) GetCache(ctx context.Context, cacheName string) (*CachedContent, error) {
 	if cacheName == "" {
 		return nil, fmt.Errorf("cache name cannot be empty")
 	}
@@ -213,9 +224,11 @@ func (s *Service) GetCache(ctx context.Context, cacheName string) (*CachedConten
 //   - opts: Options for listing (page size, token, filter, etc.)
 //
 // Returns a list response containing cached content entries.
-func (s *Service) ListCaches(ctx context.Context, opts *ListCacheOptions) (*ListCacheResponse, error) {
+func (s *service) ListCaches(ctx context.Context, opts *ListCacheOptions) (*ListCacheResponse, error) {
 	if opts == nil {
-		opts = &ListCacheOptions{PageSize: 50}
+		opts = &ListCacheOptions{
+			PageSize: 50,
+		}
 	}
 
 	s.logger.InfoContext(ctx, "Listing cached content",
@@ -262,7 +275,7 @@ func (s *Service) ListCaches(ctx context.Context, opts *ListCacheOptions) (*List
 //   - updateMask: Fields to update (if nil, all fields are updated)
 //
 // Returns the updated cached content or an error.
-func (s *Service) UpdateCache(ctx context.Context, cachedContent *CachedContent, updateMask []string) (*CachedContent, error) {
+func (s *service) UpdateCache(ctx context.Context, cachedContent *CachedContent, updateMask []string) (*CachedContent, error) {
 	if cachedContent == nil {
 		return nil, fmt.Errorf("cached content cannot be nil")
 	}
@@ -295,7 +308,7 @@ func (s *Service) UpdateCache(ctx context.Context, cachedContent *CachedContent,
 //   - cacheName: Full resource name of the cached content to delete
 //
 // Returns an error if the deletion fails.
-func (s *Service) DeleteCache(ctx context.Context, cacheName string) error {
+func (s *service) DeleteCache(ctx context.Context, cacheName string) error {
 	if cacheName == "" {
 		return fmt.Errorf("cache name cannot be empty")
 	}
@@ -319,7 +332,7 @@ func (s *Service) DeleteCache(ctx context.Context, cacheName string) error {
 // CreateCacheWithTTL creates cached content with a simple TTL configuration.
 //
 // This is a convenience method for the most common caching scenario.
-func (s *Service) CreateCacheWithTTL(ctx context.Context, content *genai.Content, modelName, displayName string, ttl time.Duration) (*CachedContent, error) {
+func (s *service) CreateCacheWithTTL(ctx context.Context, content *genai.Content, modelName, displayName string, ttl time.Duration) (*CachedContent, error) {
 	config := &CacheConfig{
 		DisplayName: displayName,
 		Model:       modelName,
@@ -329,7 +342,7 @@ func (s *Service) CreateCacheWithTTL(ctx context.Context, content *genai.Content
 }
 
 // CreateCacheForModel creates cached content for a specific model with default settings.
-func (s *Service) CreateCacheForModel(ctx context.Context, content *genai.Content, modelName string) (*CachedContent, error) {
+func (s *service) CreateCacheForModel(ctx context.Context, content *genai.Content, modelName string) (*CachedContent, error) {
 	config := &CacheConfig{
 		DisplayName: fmt.Sprintf("Cache for %s", modelName),
 		Model:       modelName,
@@ -341,7 +354,7 @@ func (s *Service) CreateCacheForModel(ctx context.Context, content *genai.Conten
 // Helper Methods
 
 // generateCacheName generates a fully qualified cache name.
-func (s *Service) generateCacheName(cacheID string) string {
+func (s *service) generateCacheName(cacheID string) string {
 	return fmt.Sprintf("projects/%s/locations/%s/cachedContents/%s", s.projectID, s.location, cacheID)
 }
 
@@ -352,16 +365,21 @@ func generateID() string {
 }
 
 // GetProjectID returns the configured project ID.
-func (s *Service) GetProjectID() string {
+func (s *service) GetProjectID() string {
 	return s.projectID
 }
 
 // GetLocation returns the configured location.
-func (s *Service) GetLocation() string {
+func (s *service) GetLocation() string {
 	return s.location
 }
 
 // GetLogger returns the configured logger.
-func (s *Service) GetLogger() *slog.Logger {
+func (s *service) GetLogger() *slog.Logger {
 	return s.logger
+}
+
+// GetParent returns the name of the Endpoint requested to serve the prediction.
+func (s *service) GetParent() string {
+	return "projects/" + s.projectID + "/locations/" + s.location
 }

@@ -15,7 +15,7 @@ import (
 // Search and batch operations for the prompts service
 
 // SearchPrompts searches for prompts based on various criteria.
-func (s *Service) SearchPrompts(ctx context.Context, req *SearchPromptsRequest) (*SearchPromptsResponse, error) {
+func (s *service) SearchPrompts(ctx context.Context, req *SearchPromptsRequest) (*SearchPromptsResponse, error) {
 	if req.Query == "" {
 		return nil, NewInvalidRequestError("query", "search query cannot be empty")
 	}
@@ -55,10 +55,7 @@ func (s *Service) SearchPrompts(ctx context.Context, req *SearchPromptsRequest) 
 		startIndex = s.parsePageToken(req.PageToken)
 	}
 
-	endIndex := startIndex + int(pageSize)
-	if endIndex > len(searchResults) {
-		endIndex = len(searchResults)
-	}
+	endIndex := min(startIndex+int(pageSize), len(searchResults))
 
 	var paginatedResults []*SearchResult
 	var nextPageToken string
@@ -93,7 +90,7 @@ func (s *Service) SearchPrompts(ctx context.Context, req *SearchPromptsRequest) 
 // Batch operations
 
 // BatchCreatePrompts creates multiple prompts in a single operation.
-func (s *Service) BatchCreatePrompts(ctx context.Context, req *BatchCreatePromptsRequest) (*BatchCreatePromptsResponse, error) {
+func (s *service) BatchCreatePrompts(ctx context.Context, req *BatchCreatePromptsRequest) (*BatchCreatePromptsResponse, error) {
 	if len(req.Prompts) == 0 {
 		return nil, NewInvalidRequestError("prompts", "cannot be empty")
 	}
@@ -164,7 +161,7 @@ func (s *Service) BatchCreatePrompts(ctx context.Context, req *BatchCreatePrompt
 }
 
 // ExportPrompts exports prompts to various formats.
-func (s *Service) ExportPrompts(ctx context.Context, req *ExportPromptsRequest) (*ExportPromptsResponse, error) {
+func (s *service) ExportPrompts(ctx context.Context, req *ExportPromptsRequest) (*ExportPromptsResponse, error) {
 	// Determine which prompts to export
 	var prompts []*Prompt
 	var err error
@@ -226,7 +223,7 @@ func (s *Service) ExportPrompts(ctx context.Context, req *ExportPromptsRequest) 
 }
 
 // ImportPrompts imports prompts from various formats.
-func (s *Service) ImportPrompts(ctx context.Context, req *ImportPromptsRequest) (*BatchCreatePromptsResponse, error) {
+func (s *service) ImportPrompts(ctx context.Context, req *ImportPromptsRequest) (*BatchCreatePromptsResponse, error) {
 	if len(req.Data) == 0 {
 		return nil, NewInvalidRequestError("data", "cannot be empty")
 	}
@@ -289,7 +286,7 @@ func (s *Service) ImportPrompts(ctx context.Context, req *ImportPromptsRequest) 
 // Helper methods for search functionality
 
 // loadPromptsForSearch loads prompts that match the basic filters.
-func (s *Service) loadPromptsForSearch(ctx context.Context, req *SearchPromptsRequest) ([]*Prompt, error) {
+func (s *service) loadPromptsForSearch(ctx context.Context, req *SearchPromptsRequest) ([]*Prompt, error) {
 	listReq := &ListPromptsRequest{
 		Category:      req.Category,
 		Tags:          req.Tags,
@@ -309,7 +306,7 @@ func (s *Service) loadPromptsForSearch(ctx context.Context, req *SearchPromptsRe
 }
 
 // performSearch performs the actual search logic.
-func (s *Service) performSearch(prompts []*Prompt, req *SearchPromptsRequest) []*SearchResult {
+func (s *service) performSearch(prompts []*Prompt, req *SearchPromptsRequest) []*SearchResult {
 	var results []*SearchResult
 	query := strings.ToLower(req.Query)
 
@@ -335,7 +332,7 @@ func (s *Service) performSearch(prompts []*Prompt, req *SearchPromptsRequest) []
 }
 
 // calculateSearchScore calculates the search score for a prompt.
-func (s *Service) calculateSearchScore(prompt *Prompt, query string, searchFields []string, req *SearchPromptsRequest) (float64, map[string][]string, []string) {
+func (s *service) calculateSearchScore(prompt *Prompt, query string, searchFields []string, req *SearchPromptsRequest) (float64, map[string][]string, []string) {
 	var totalScore float64
 	highlights := make(map[string][]string)
 	var matchFields []string
@@ -385,7 +382,7 @@ func (s *Service) calculateSearchScore(prompt *Prompt, query string, searchField
 }
 
 // scoreFieldMatch scores how well a field matches the query.
-func (s *Service) scoreFieldMatch(fieldText, query string, req *SearchPromptsRequest) (float64, []string) {
+func (s *service) scoreFieldMatch(fieldText, query string, req *SearchPromptsRequest) (float64, []string) {
 	if !req.CaseSensitive {
 		fieldText = strings.ToLower(fieldText)
 	}
@@ -411,7 +408,7 @@ func (s *Service) scoreFieldMatch(fieldText, query string, req *SearchPromptsReq
 }
 
 // fuzzyMatchScore calculates a fuzzy match score.
-func (s *Service) fuzzyMatchScore(text, query string) float64 {
+func (s *service) fuzzyMatchScore(text, query string) float64 {
 	// Simple fuzzy scoring based on character overlap
 	// In a real implementation, you might use more sophisticated algorithms like Levenshtein distance
 
@@ -437,7 +434,7 @@ func (s *Service) fuzzyMatchScore(text, query string) float64 {
 }
 
 // extractHighlight extracts highlighted text around a match.
-func (s *Service) extractHighlight(text, query string) string {
+func (s *service) extractHighlight(text, query string) string {
 	index := strings.Index(text, query)
 	if index == -1 {
 		return ""
@@ -476,7 +473,7 @@ func (s *Service) extractHighlight(text, query string) string {
 // Helper methods for batch operations
 
 // getPromptsByIDs retrieves multiple prompts by their IDs.
-func (s *Service) getPromptsByIDs(ctx context.Context, promptIDs []string, includeVersions bool) ([]*Prompt, error) {
+func (s *service) getPromptsByIDs(ctx context.Context, promptIDs []string, includeVersions bool) ([]*Prompt, error) {
 	var prompts []*Prompt
 
 	for _, promptID := range promptIDs {
@@ -498,7 +495,7 @@ func (s *Service) getPromptsByIDs(ctx context.Context, promptIDs []string, inclu
 }
 
 // getPromptsByNames retrieves multiple prompts by their names.
-func (s *Service) getPromptsByNames(ctx context.Context, names []string, includeVersions bool) ([]*Prompt, error) {
+func (s *service) getPromptsByNames(ctx context.Context, names []string, includeVersions bool) ([]*Prompt, error) {
 	var prompts []*Prompt
 
 	for _, name := range names {
@@ -520,7 +517,7 @@ func (s *Service) getPromptsByNames(ctx context.Context, names []string, include
 }
 
 // exportToFormat exports prompts to the specified format.
-func (s *Service) exportToFormat(prompts []*Prompt, format string) ([]byte, error) {
+func (s *service) exportToFormat(prompts []*Prompt, format string) ([]byte, error) {
 	switch strings.ToLower(format) {
 	case "json":
 		return s.exportToJSON(prompts)
@@ -534,7 +531,7 @@ func (s *Service) exportToFormat(prompts []*Prompt, format string) ([]byte, erro
 }
 
 // parseImportData parses import data based on format.
-func (s *Service) parseImportData(data []byte, format string) ([]*Prompt, error) {
+func (s *service) parseImportData(data []byte, format string) ([]*Prompt, error) {
 	switch strings.ToLower(format) {
 	case "json":
 		return s.parseJSONImport(data)
@@ -550,32 +547,32 @@ func (s *Service) parseImportData(data []byte, format string) ([]*Prompt, error)
 // Placeholder implementations for export/import formats
 // These would be implemented with proper JSON/YAML/CSV libraries
 
-func (s *Service) exportToJSON(prompts []*Prompt) ([]byte, error) {
+func (s *service) exportToJSON(prompts []*Prompt) ([]byte, error) {
 	// This would implement JSON marshaling
 	return []byte("{}"), nil
 }
 
-func (s *Service) exportToYAML(prompts []*Prompt) ([]byte, error) {
+func (s *service) exportToYAML(prompts []*Prompt) ([]byte, error) {
 	// This would implement YAML marshaling
 	return []byte(""), nil
 }
 
-func (s *Service) exportToCSV(prompts []*Prompt) ([]byte, error) {
+func (s *service) exportToCSV(prompts []*Prompt) ([]byte, error) {
 	// This would implement CSV marshaling
 	return []byte(""), nil
 }
 
-func (s *Service) parseJSONImport(data []byte) ([]*Prompt, error) {
+func (s *service) parseJSONImport(data []byte) ([]*Prompt, error) {
 	// This would implement JSON unmarshaling
 	return []*Prompt{}, nil
 }
 
-func (s *Service) parseYAMLImport(data []byte) ([]*Prompt, error) {
+func (s *service) parseYAMLImport(data []byte) ([]*Prompt, error) {
 	// This would implement YAML unmarshaling
 	return []*Prompt{}, nil
 }
 
-func (s *Service) parseCSVImport(data []byte) ([]*Prompt, error) {
+func (s *service) parseCSVImport(data []byte) ([]*Prompt, error) {
 	// This would implement CSV parsing
 	return []*Prompt{}, nil
 }

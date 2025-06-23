@@ -11,7 +11,6 @@ import (
 	"time"
 
 	aiplatform "cloud.google.com/go/aiplatform/apiv1beta1"
-	"cloud.google.com/go/auth/credentials"
 	"google.golang.org/api/option"
 )
 
@@ -20,7 +19,25 @@ import (
 // The service enables creation, management, versioning, and deployment of prompt templates
 // for use with Vertex AI generative models, mirroring the functionality of Python's
 // vertexai.prompts module.
-type Service struct {
+type Service interface {
+	GetProjectID() string
+	GetLocation() string
+	GetCacheStats() map[string]any
+	ClearCache()
+	CreatePrompt(ctx context.Context, req *CreatePromptRequest) (*Prompt, error)
+	GetPrompt(ctx context.Context, req *GetPromptRequest) (*Prompt, error)
+	UpdatePrompt(ctx context.Context, req *UpdatePromptRequest) (*Prompt, error)
+	DeletePrompt(ctx context.Context, req *DeletePromptRequest) error
+	ListPrompts(ctx context.Context, req *ListPromptsRequest) (*ListPromptsResponse, error)
+	CreateVersion(ctx context.Context, req *CreateVersionRequest) (*PromptVersion, error)
+	GetVersion(ctx context.Context, promptID, versionID string) (*PromptVersion, error)
+	ListVersions(ctx context.Context, req *ListVersionsRequest) (*ListVersionsResponse, error)
+	RestoreVersion(ctx context.Context, req *RestoreVersionRequest) (*PromptVersion, error)
+	DeleteVersion(ctx context.Context, promptID, versionID string) error
+	Close() error
+}
+
+type service struct {
 	// AI Platform clients
 	predictionClient *aiplatform.PredictionClient
 	notebookClient   *aiplatform.NotebookClient
@@ -47,33 +64,35 @@ type Service struct {
 	mu          sync.RWMutex
 }
 
+var _ Service = (*service)(nil)
+
 // ServiceOption is a functional option for configuring the prompts service.
-type ServiceOption func(*Service)
+type ServiceOption func(*service)
 
 // WithLogger sets a custom logger for the service.
 func WithLogger(logger *slog.Logger) ServiceOption {
-	return func(s *Service) {
+	return func(s *service) {
 		s.logger = logger
 	}
 }
 
 // WithCacheExpiry sets the cache expiry duration for prompts.
 func WithCacheExpiry(duration time.Duration) ServiceOption {
-	return func(s *Service) {
+	return func(s *service) {
 		s.cacheExpiry = duration
 	}
 }
 
 // WithTemplateEngine sets a custom template processor.
 func WithTemplateEngine(engine *TemplateProcessor) ServiceOption {
-	return func(s *Service) {
+	return func(s *service) {
 		s.templateEngine = engine
 	}
 }
 
 // WithMetricsCollector sets a custom metrics collector.
 func WithMetricsCollector(collector *MetricsCollector) ServiceOption {
-	return func(s *Service) {
+	return func(s *service) {
 		s.metrics = collector
 	}
 }
@@ -90,7 +109,7 @@ func WithMetricsCollector(collector *MetricsCollector) ServiceOption {
 //   - opts: Optional configuration options
 //
 // Returns a fully initialized prompts service or an error if initialization fails.
-func NewService(ctx context.Context, projectID, location string, opts ...ServiceOption) (*Service, error) {
+func NewService(ctx context.Context, projectID, location string, opts ...option.ClientOption) (*service, error) {
 	if projectID == "" {
 		return nil, NewInvalidRequestError("projectID", "cannot be empty")
 	}
@@ -98,7 +117,7 @@ func NewService(ctx context.Context, projectID, location string, opts ...Service
 		return nil, NewInvalidRequestError("location", "cannot be empty")
 	}
 
-	service := &Service{
+	service := &service{
 		projectID:      projectID,
 		location:       location,
 		logger:         slog.Default(),
@@ -109,30 +128,15 @@ func NewService(ctx context.Context, projectID, location string, opts ...Service
 		metrics:        NewMetricsCollector(),
 	}
 
-	// Apply options
-	for _, opt := range opts {
-		opt(service)
-	}
-
-	// Create credentials using Application Default Credentials
-	creds, err := credentials.DetectDefault(&credentials.DetectOptions{
-		Scopes: []string{
-			"https://www.googleapis.com/auth/cloud-platform",
-		},
-	})
-	if err != nil {
-		return nil, fmt.Errorf("failed to detect default credentials: %w", err)
-	}
-
 	// Initialize AI Platform prediction client
-	predictionClient, err := aiplatform.NewPredictionClient(ctx, option.WithAuthCredentials(creds))
+	predictionClient, err := aiplatform.NewPredictionClient(ctx, opts...)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create AI Platform prediction client: %w", err)
 	}
 	service.predictionClient = predictionClient
 
 	// Initialize AI Platform notebook client
-	notebookClient, err := aiplatform.NewNotebookClient(ctx, option.WithAuthCredentials(creds))
+	notebookClient, err := aiplatform.NewNotebookClient(ctx, opts...)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create AI Platform notebook client: %w", err)
 	}
@@ -152,7 +156,7 @@ func NewService(ctx context.Context, projectID, location string, opts ...Service
 //
 // This method should be called when the service is no longer needed to ensure
 // proper cleanup of underlying connections and resources.
-func (s *Service) Close() error {
+func (s *service) Close() error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
@@ -195,7 +199,7 @@ func (s *Service) Close() error {
 //
 // The prompt is validated before creation, and if save_to_cloud is true,
 // it will be stored as an online resource accessible via the Google Cloud console.
-func (s *Service) CreatePrompt(ctx context.Context, req *CreatePromptRequest) (*Prompt, error) {
+func (s *service) CreatePrompt(ctx context.Context, req *CreatePromptRequest) (*Prompt, error) {
 	if err := s.validateRequest(req); err != nil {
 		return nil, err
 	}
@@ -269,7 +273,7 @@ func (s *Service) CreatePrompt(ctx context.Context, req *CreatePromptRequest) (*
 }
 
 // GetPrompt retrieves a prompt by ID or name.
-func (s *Service) GetPrompt(ctx context.Context, req *GetPromptRequest) (*Prompt, error) {
+func (s *service) GetPrompt(ctx context.Context, req *GetPromptRequest) (*Prompt, error) {
 	if req.PromptID == "" && req.Name == "" {
 		return nil, NewInvalidRequestError("prompt_id_or_name", "either prompt_id or name must be specified")
 	}
@@ -346,7 +350,7 @@ func (s *Service) GetPrompt(ctx context.Context, req *GetPromptRequest) (*Prompt
 }
 
 // UpdatePrompt updates an existing prompt.
-func (s *Service) UpdatePrompt(ctx context.Context, req *UpdatePromptRequest) (*Prompt, error) {
+func (s *service) UpdatePrompt(ctx context.Context, req *UpdatePromptRequest) (*Prompt, error) {
 	if req.Prompt.ID == "" && req.Prompt.Name == "" {
 		return nil, NewInvalidRequestError("prompt_id_or_name", "either prompt_id or name must be specified")
 	}
@@ -414,7 +418,7 @@ func (s *Service) UpdatePrompt(ctx context.Context, req *UpdatePromptRequest) (*
 }
 
 // DeletePrompt deletes a prompt and optionally all its versions.
-func (s *Service) DeletePrompt(ctx context.Context, req *DeletePromptRequest) error {
+func (s *service) DeletePrompt(ctx context.Context, req *DeletePromptRequest) error {
 	if req.PromptID == "" && req.Name == "" {
 		return NewInvalidRequestError("prompt_id_or_name", "either prompt_id or name must be specified")
 	}
@@ -475,7 +479,7 @@ func (s *Service) DeletePrompt(ctx context.Context, req *DeletePromptRequest) er
 }
 
 // ListPrompts lists prompts with filtering, searching, and pagination.
-func (s *Service) ListPrompts(ctx context.Context, req *ListPromptsRequest) (*ListPromptsResponse, error) {
+func (s *service) ListPrompts(ctx context.Context, req *ListPromptsRequest) (*ListPromptsResponse, error) {
 	// Load prompts from cloud storage (simulated)
 	prompts, nextToken, totalSize, err := s.listPromptsFromCloud(ctx, req)
 	if err != nil {
@@ -501,7 +505,7 @@ func (s *Service) ListPrompts(ctx context.Context, req *ListPromptsRequest) (*Li
 
 // Helper methods for the service implementation
 
-func (s *Service) validateRequest(req *CreatePromptRequest) error {
+func (s *service) validateRequest(req *CreatePromptRequest) error {
 	if req == nil {
 		return NewInvalidRequestError("request", "cannot be nil")
 	}
@@ -514,27 +518,27 @@ func (s *Service) validateRequest(req *CreatePromptRequest) error {
 	return nil
 }
 
-func (s *Service) validatePromptTemplate(prompt *Prompt) error {
+func (s *service) validatePromptTemplate(prompt *Prompt) error {
 	return s.templateEngine.ValidateTemplate(prompt.Template, prompt.Variables)
 }
 
-func (s *Service) generatePromptID() string {
+func (s *service) generatePromptID() string {
 	return fmt.Sprintf("prompt_%d", time.Now().UnixNano())
 }
 
-func (s *Service) cachePrompt(prompt *Prompt) {
+func (s *service) cachePrompt(prompt *Prompt) {
 	s.cacheMutex.Lock()
 	defer s.cacheMutex.Unlock()
 	s.promptCache[prompt.ID] = prompt
 }
 
-func (s *Service) getCachedPrompt(promptID string) *Prompt {
+func (s *service) getCachedPrompt(promptID string) *Prompt {
 	s.cacheMutex.RLock()
 	defer s.cacheMutex.RUnlock()
 	return s.promptCache[promptID]
 }
 
-func (s *Service) removeCachedPrompt(promptID string) {
+func (s *service) removeCachedPrompt(promptID string) {
 	s.cacheMutex.Lock()
 	defer s.cacheMutex.Unlock()
 	delete(s.promptCache, promptID)
@@ -542,13 +546,13 @@ func (s *Service) removeCachedPrompt(promptID string) {
 
 // Placeholder methods for cloud operations (to be implemented with actual Vertex AI APIs)
 
-func (s *Service) savePromptToCloud(ctx context.Context, prompt *Prompt) error {
+func (s *service) savePromptToCloud(ctx context.Context, prompt *Prompt) error {
 	// This would implement the actual Vertex AI API call to save the prompt
 	s.logger.InfoContext(ctx, "Saving prompt to cloud storage", slog.String("prompt_id", prompt.ID))
 	return nil
 }
 
-func (s *Service) loadPromptFromCloud(ctx context.Context, promptID, name string) (*Prompt, error) {
+func (s *service) loadPromptFromCloud(ctx context.Context, promptID, name string) (*Prompt, error) {
 	// This would implement the actual Vertex AI API call to load the prompt
 	s.logger.InfoContext(ctx, "Loading prompt from cloud storage",
 		slog.String("prompt_id", promptID),
@@ -556,19 +560,19 @@ func (s *Service) loadPromptFromCloud(ctx context.Context, promptID, name string
 	return nil, ErrPromptNotFound
 }
 
-func (s *Service) deletePromptFromCloud(ctx context.Context, promptID string) error {
+func (s *service) deletePromptFromCloud(ctx context.Context, promptID string) error {
 	// This would implement the actual Vertex AI API call to delete the prompt
 	s.logger.InfoContext(ctx, "Deleting prompt from cloud storage", slog.String("prompt_id", promptID))
 	return nil
 }
 
-func (s *Service) listPromptsFromCloud(ctx context.Context, req *ListPromptsRequest) ([]*Prompt, string, int32, error) {
+func (s *service) listPromptsFromCloud(ctx context.Context, req *ListPromptsRequest) ([]*Prompt, string, int32, error) {
 	// This would implement the actual Vertex AI API call to list prompts
 	s.logger.InfoContext(ctx, "Listing prompts from cloud storage")
 	return []*Prompt{}, "", 0, nil
 }
 
-func (s *Service) getPromptByName(ctx context.Context, name string) (*Prompt, error) {
+func (s *service) getPromptByName(ctx context.Context, name string) (*Prompt, error) {
 	// Check cache first by iterating through cached prompts
 	s.cacheMutex.RLock()
 	defer s.cacheMutex.RUnlock()
@@ -584,7 +588,7 @@ func (s *Service) getPromptByName(ctx context.Context, name string) (*Prompt, er
 	return nil, ErrPromptNotFound
 }
 
-func (s *Service) filterPrompts(prompts []*Prompt, req *ListPromptsRequest) []*Prompt {
+func (s *service) filterPrompts(prompts []*Prompt, req *ListPromptsRequest) []*Prompt {
 	// Apply additional client-side filtering
 	return prompts
 }
@@ -592,29 +596,29 @@ func (s *Service) filterPrompts(prompts []*Prompt, req *ListPromptsRequest) []*P
 // Configuration and utility methods
 
 // GetProjectID returns the configured Google Cloud project ID.
-func (s *Service) GetProjectID() string {
+func (s *service) GetProjectID() string {
 	return s.projectID
 }
 
 // GetLocation returns the configured geographic location.
-func (s *Service) GetLocation() string {
+func (s *service) GetLocation() string {
 	return s.location
 }
 
 // GetLogger returns the configured logger instance.
-func (s *Service) GetLogger() *slog.Logger {
+func (s *service) GetLogger() *slog.Logger {
 	return s.logger
 }
 
 // IsInitialized returns whether the service is properly initialized.
-func (s *Service) IsInitialized() bool {
+func (s *service) IsInitialized() bool {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 	return s.initialized
 }
 
 // GetCacheStats returns cache statistics.
-func (s *Service) GetCacheStats() map[string]any {
+func (s *service) GetCacheStats() map[string]any {
 	s.cacheMutex.RLock()
 	defer s.cacheMutex.RUnlock()
 
@@ -626,7 +630,7 @@ func (s *Service) GetCacheStats() map[string]any {
 }
 
 // ClearCache clears all cached data.
-func (s *Service) ClearCache() {
+func (s *service) ClearCache() {
 	s.cacheMutex.Lock()
 	defer s.cacheMutex.Unlock()
 

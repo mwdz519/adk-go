@@ -5,6 +5,7 @@ package reasoningengine
 
 import (
 	"context"
+	"maps"
 	"time"
 
 	"google.golang.org/genai"
@@ -214,18 +215,14 @@ func (m *SimpleMemory) ToMap() map[string]any {
 		return make(map[string]any)
 	}
 	result := make(map[string]any, len(m.data))
-	for k, v := range m.data {
-		result[k] = v
-	}
+	maps.Copy(result, m.data)
 	return result
 }
 
 // FromMap loads memory from a map.
 func (m *SimpleMemory) FromMap(data map[string]any) {
 	m.data = make(map[string]any, len(data))
-	for k, v := range data {
-		m.data[k] = v
-	}
+	maps.Copy(m.data, data)
 }
 
 // Source represents an information source.
@@ -564,10 +561,10 @@ type LogOptions struct {
 	Level LogLevel `json:"level,omitempty"`
 
 	// StartTime for log range
-	StartTime time.Time `json:"start_time,omitempty"`
+	StartTime time.Time `json:"start_time,omitzero"`
 
 	// EndTime for log range
-	EndTime time.Time `json:"end_time,omitempty"`
+	EndTime time.Time `json:"end_time,omitzero"`
 
 	// Filter expression for filtering logs
 	Filter string `json:"filter,omitempty"`

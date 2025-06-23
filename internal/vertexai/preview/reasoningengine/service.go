@@ -7,11 +7,11 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
+	"maps"
 	"sync"
 	"time"
 
 	aiplatform "cloud.google.com/go/aiplatform/apiv1beta1"
-	"cloud.google.com/go/auth/credentials"
 	"google.golang.org/api/option"
 )
 
@@ -20,7 +20,25 @@ import (
 // The service manages agent deployment, runtime, and lifecycle operations.
 // It supports containerized deployment of agents with auto-scaling, monitoring,
 // and API gateway functionality.
-type Service struct {
+type Service interface {
+	RegisterHandler(name string, handler AgentHandler)
+	UnregisterHandler(name string)
+	CreateReasoningEngine(ctx context.Context, config *AgentConfig, deploySpec *DeploymentSpec) (*ReasoningEngine, error)
+	GetReasoningEngine(ctx context.Context, name string) (*ReasoningEngine, error)
+	ListReasoningEngines(ctx context.Context, opts *ListOptions) ([]*ReasoningEngine, error)
+	UpdateReasoningEngine(ctx context.Context, name string, updateSpec *UpdateSpec) (*ReasoningEngine, error)
+	DeleteReasoningEngine(ctx context.Context, name string) error
+	Query(ctx context.Context, name string, input map[string]any) (*AgentResponse, error)
+	QueryStream(ctx context.Context, name string) (QueryStream, error)
+	WaitForDeployment(ctx context.Context, name string, timeout time.Duration) error
+	GetMetrics(ctx context.Context, name string, opts *MetricsOptions) (*Metrics, error)
+	GetLogs(ctx context.Context, name string, opts *LogOptions) ([]*LogEntry, error)
+	CreateAlert(ctx context.Context, name string, alertConfig *AlertConfig) error
+	SetAccessPolicy(ctx context.Context, name string, policy *AccessPolicy) error
+	Close() error
+}
+
+type service struct {
 	client    *aiplatform.PredictionClient
 	projectID string
 	location  string
@@ -35,15 +53,7 @@ type Service struct {
 	deployMu    sync.RWMutex
 }
 
-// ServiceOption is a functional option for configuring the reasoning engine service.
-type ServiceOption func(*Service)
-
-// WithLogger sets a custom logger for the service.
-func WithLogger(logger *slog.Logger) ServiceOption {
-	return func(s *Service) {
-		s.logger = logger
-	}
-}
+var _ Service = (*service)(nil)
 
 // NewService creates a new reasoning engine service.
 //
@@ -57,7 +67,7 @@ func WithLogger(logger *slog.Logger) ServiceOption {
 //   - opts: Optional configuration options
 //
 // Returns a fully initialized reasoning engine service or an error if initialization fails.
-func NewService(ctx context.Context, projectID, location string, opts ...ServiceOption) (*Service, error) {
+func NewService(ctx context.Context, projectID, location string, opts ...option.ClientOption) (*service, error) {
 	if projectID == "" {
 		return nil, fmt.Errorf("projectID is required")
 	}
@@ -65,7 +75,7 @@ func NewService(ctx context.Context, projectID, location string, opts ...Service
 		return nil, fmt.Errorf("location is required")
 	}
 
-	service := &Service{
+	service := &service{
 		projectID:   projectID,
 		location:    location,
 		logger:      slog.Default(),
@@ -73,23 +83,8 @@ func NewService(ctx context.Context, projectID, location string, opts ...Service
 		deployments: make(map[string]*ReasoningEngine),
 	}
 
-	// Apply options
-	for _, opt := range opts {
-		opt(service)
-	}
-
-	// Create credentials
-	creds, err := credentials.DetectDefault(&credentials.DetectOptions{
-		Scopes: []string{
-			"https://www.googleapis.com/auth/cloud-platform",
-		},
-	})
-	if err != nil {
-		return nil, fmt.Errorf("failed to detect credentials: %w", err)
-	}
-
 	// Create AI Platform client
-	client, err := aiplatform.NewPredictionClient(ctx, option.WithAuthCredentials(creds))
+	client, err := aiplatform.NewPredictionClient(ctx, opts...)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create prediction client: %w", err)
 	}
@@ -104,7 +99,7 @@ func NewService(ctx context.Context, projectID, location string, opts ...Service
 }
 
 // Close closes the reasoning engine service and releases all resources.
-func (s *Service) Close() error {
+func (s *service) Close() error {
 	s.logger.Info("Closing reasoning engine service")
 
 	if s.client != nil {
@@ -125,7 +120,7 @@ func (s *Service) Close() error {
 // Parameters:
 //   - name: Agent name identifier
 //   - handler: Function that implements the agent logic
-func (s *Service) RegisterHandler(name string, handler AgentHandler) {
+func (s *service) RegisterHandler(name string, handler AgentHandler) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
@@ -136,7 +131,7 @@ func (s *Service) RegisterHandler(name string, handler AgentHandler) {
 }
 
 // UnregisterHandler removes an agent handler from the registry.
-func (s *Service) UnregisterHandler(name string) {
+func (s *service) UnregisterHandler(name string) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
@@ -157,7 +152,7 @@ func (s *Service) UnregisterHandler(name string) {
 //   - deploySpec: Deployment specifications
 //
 // Returns the created reasoning engine or an error if deployment fails.
-func (s *Service) CreateReasoningEngine(ctx context.Context, config *AgentConfig, deploySpec *DeploymentSpec) (*ReasoningEngine, error) {
+func (s *service) CreateReasoningEngine(ctx context.Context, config *AgentConfig, deploySpec *DeploymentSpec) (*ReasoningEngine, error) {
 	s.logger.InfoContext(ctx, "Creating reasoning engine",
 		slog.String("name", config.Name),
 		slog.String("runtime", string(config.Runtime)),
@@ -210,7 +205,7 @@ func (s *Service) CreateReasoningEngine(ctx context.Context, config *AgentConfig
 }
 
 // GetReasoningEngine retrieves information about a deployed agent.
-func (s *Service) GetReasoningEngine(ctx context.Context, name string) (*ReasoningEngine, error) {
+func (s *service) GetReasoningEngine(ctx context.Context, name string) (*ReasoningEngine, error) {
 	s.deployMu.RLock()
 	engine, exists := s.deployments[name]
 	s.deployMu.RUnlock()
@@ -225,7 +220,7 @@ func (s *Service) GetReasoningEngine(ctx context.Context, name string) (*Reasoni
 }
 
 // ListReasoningEngines lists all deployed agents.
-func (s *Service) ListReasoningEngines(ctx context.Context, opts *ListOptions) ([]*ReasoningEngine, error) {
+func (s *service) ListReasoningEngines(ctx context.Context, opts *ListOptions) ([]*ReasoningEngine, error) {
 	s.deployMu.RLock()
 	defer s.deployMu.RUnlock()
 
@@ -251,10 +246,7 @@ func (s *Service) ListReasoningEngines(ctx context.Context, opts *ListOptions) (
 			// For now, ignore pagination
 		}
 
-		end := start + opts.PageSize
-		if end > len(engines) {
-			end = len(engines)
-		}
+		end := min(start+opts.PageSize, len(engines))
 
 		if start < len(engines) {
 			engines = engines[start:end]
@@ -267,7 +259,7 @@ func (s *Service) ListReasoningEngines(ctx context.Context, opts *ListOptions) (
 }
 
 // UpdateReasoningEngine updates a deployed agent's configuration.
-func (s *Service) UpdateReasoningEngine(ctx context.Context, name string, updateSpec *UpdateSpec) (*ReasoningEngine, error) {
+func (s *service) UpdateReasoningEngine(ctx context.Context, name string, updateSpec *UpdateSpec) (*ReasoningEngine, error) {
 	s.deployMu.Lock()
 	defer s.deployMu.Unlock()
 
@@ -306,17 +298,13 @@ func (s *Service) UpdateReasoningEngine(ctx context.Context, name string, update
 		if engine.DeploymentSpec.Environment == nil {
 			engine.DeploymentSpec.Environment = make(map[string]string)
 		}
-		for k, v := range updateSpec.Environment {
-			engine.DeploymentSpec.Environment[k] = v
-		}
+		maps.Copy(engine.DeploymentSpec.Environment, updateSpec.Environment)
 	}
 	if updateSpec.Labels != nil {
 		if engine.Labels == nil {
 			engine.Labels = make(map[string]string)
 		}
-		for k, v := range updateSpec.Labels {
-			engine.Labels[k] = v
-		}
+		maps.Copy(engine.Labels, updateSpec.Labels)
 	}
 
 	engine.UpdateTime = time.Now()
@@ -335,7 +323,7 @@ func (s *Service) UpdateReasoningEngine(ctx context.Context, name string, update
 }
 
 // DeleteReasoningEngine deletes a deployed agent.
-func (s *Service) DeleteReasoningEngine(ctx context.Context, name string) error {
+func (s *service) DeleteReasoningEngine(ctx context.Context, name string) error {
 	s.deployMu.Lock()
 	defer s.deployMu.Unlock()
 
@@ -371,7 +359,7 @@ func (s *Service) DeleteReasoningEngine(ctx context.Context, name string) error 
 }
 
 // Query sends a request to a deployed agent and returns the response.
-func (s *Service) Query(ctx context.Context, name string, input map[string]any) (*AgentResponse, error) {
+func (s *service) Query(ctx context.Context, name string, input map[string]any) (*AgentResponse, error) {
 	// Convert input to AgentRequest
 	request := &AgentRequest{
 		Input:    fmt.Sprintf("%v", input["input"]),
@@ -421,7 +409,7 @@ func (s *Service) Query(ctx context.Context, name string, input map[string]any) 
 }
 
 // QueryStream creates a streaming connection to a deployed agent.
-func (s *Service) QueryStream(ctx context.Context, name string) (QueryStream, error) {
+func (s *service) QueryStream(ctx context.Context, name string) (QueryStream, error) {
 	// Check if agent exists
 	s.deployMu.RLock()
 	engine, exists := s.deployments[name]
@@ -444,7 +432,7 @@ func (s *Service) QueryStream(ctx context.Context, name string) (QueryStream, er
 }
 
 // WaitForDeployment waits for a deployment to complete.
-func (s *Service) WaitForDeployment(ctx context.Context, name string, timeout time.Duration) error {
+func (s *service) WaitForDeployment(ctx context.Context, name string, timeout time.Duration) error {
 	deadline := time.Now().Add(timeout)
 
 	for time.Now().Before(deadline) {
@@ -473,7 +461,7 @@ func (s *Service) WaitForDeployment(ctx context.Context, name string, timeout ti
 }
 
 // GetMetrics retrieves performance metrics for a deployed agent.
-func (s *Service) GetMetrics(ctx context.Context, name string, opts *MetricsOptions) (*Metrics, error) {
+func (s *service) GetMetrics(ctx context.Context, name string, opts *MetricsOptions) (*Metrics, error) {
 	s.deployMu.RLock()
 	_, exists := s.deployments[name]
 	s.deployMu.RUnlock()
@@ -513,7 +501,7 @@ func (s *Service) GetMetrics(ctx context.Context, name string, opts *MetricsOpti
 }
 
 // GetLogs retrieves logs for a deployed agent.
-func (s *Service) GetLogs(ctx context.Context, name string, opts *LogOptions) ([]*LogEntry, error) {
+func (s *service) GetLogs(ctx context.Context, name string, opts *LogOptions) ([]*LogEntry, error) {
 	s.deployMu.RLock()
 	engine, exists := s.deployments[name]
 	s.deployMu.RUnlock()
@@ -579,7 +567,7 @@ func (s *Service) GetLogs(ctx context.Context, name string, opts *LogOptions) ([
 }
 
 // CreateAlert creates a monitoring alert for an agent.
-func (s *Service) CreateAlert(ctx context.Context, name string, alertConfig *AlertConfig) error {
+func (s *service) CreateAlert(ctx context.Context, name string, alertConfig *AlertConfig) error {
 	s.deployMu.RLock()
 	_, exists := s.deployments[name]
 	s.deployMu.RUnlock()
@@ -600,7 +588,7 @@ func (s *Service) CreateAlert(ctx context.Context, name string, alertConfig *Ale
 }
 
 // SetAccessPolicy sets access control policies for an agent.
-func (s *Service) SetAccessPolicy(ctx context.Context, name string, policy *AccessPolicy) error {
+func (s *service) SetAccessPolicy(ctx context.Context, name string, policy *AccessPolicy) error {
 	s.deployMu.RLock()
 	_, exists := s.deployments[name]
 	s.deployMu.RUnlock()
@@ -620,7 +608,7 @@ func (s *Service) SetAccessPolicy(ctx context.Context, name string, policy *Acce
 }
 
 // validateConfig validates agent configuration.
-func (s *Service) validateConfig(config *AgentConfig) error {
+func (s *service) validateConfig(config *AgentConfig) error {
 	if config.Name == "" {
 		return fmt.Errorf("name is required")
 	}
@@ -634,7 +622,7 @@ func (s *Service) validateConfig(config *AgentConfig) error {
 }
 
 // getDefaultDeploymentSpec returns default deployment specifications.
-func (s *Service) getDefaultDeploymentSpec() *DeploymentSpec {
+func (s *service) getDefaultDeploymentSpec() *DeploymentSpec {
 	return &DeploymentSpec{
 		Resources: &ResourceSpec{
 			CPU:    "1",
@@ -660,7 +648,7 @@ func (s *Service) getDefaultDeploymentSpec() *DeploymentSpec {
 }
 
 // simulateDeployment simulates the deployment process.
-func (s *Service) simulateDeployment(ctx context.Context, engine *ReasoningEngine) {
+func (s *service) simulateDeployment(ctx context.Context, engine *ReasoningEngine) {
 	// Simulate deployment time
 	time.Sleep(10 * time.Second)
 
@@ -680,7 +668,7 @@ func (s *Service) simulateDeployment(ctx context.Context, engine *ReasoningEngin
 }
 
 // simulateUpdate simulates the update process.
-func (s *Service) simulateUpdate(ctx context.Context, engine *ReasoningEngine) {
+func (s *service) simulateUpdate(ctx context.Context, engine *ReasoningEngine) {
 	// Simulate update time
 	time.Sleep(5 * time.Second)
 
@@ -698,7 +686,7 @@ func (s *Service) simulateUpdate(ctx context.Context, engine *ReasoningEngine) {
 }
 
 // matchesFilter checks if an engine matches the given filter.
-func (s *Service) matchesFilter(engine *ReasoningEngine, filter string) bool {
+func (s *service) matchesFilter(engine *ReasoningEngine, filter string) bool {
 	// Simple filter implementation - in practice, this would be more sophisticated
 	switch filter {
 	case "state=ACTIVE":

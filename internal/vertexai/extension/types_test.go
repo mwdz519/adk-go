@@ -51,7 +51,7 @@ func TestExtension_GetID(t *testing.T) {
 func TestManifest_Creation(t *testing.T) {
 	tests := []struct {
 		name     string
-		manifest *ExtensionManifest
+		manifest *aiplatformpb.ExtensionManifest
 		isValid  bool
 	}{
 		{
@@ -124,7 +124,7 @@ func TestManifest_Creation(t *testing.T) {
 func TestRuntimeConfig_Creation(t *testing.T) {
 	tests := []struct {
 		name   string
-		config *RuntimeConfig
+		config *aiplatformpb.RuntimeConfig
 	}{
 		{
 			name:   "code interpreter config",
@@ -152,62 +152,6 @@ func TestRuntimeConfig_Creation(t *testing.T) {
 				t.Errorf("Expected GoogleFirstPartyExtensionConfig to be set")
 			}
 		})
-	}
-}
-
-func TestRequestResponse_Creation(t *testing.T) {
-	// Test CreateExtensionRequest (backward compatibility)
-	createReq := &CreateExtensionRequest{
-		DisplayName: "Test Extension",
-		Description: "A test extension",
-		Manifest: NewExtensionManifest(
-			"test_extension",
-			"Test extension",
-			"gs://test-bucket/openapi.yaml",
-			NewGoogleServiceAccountConfig(""),
-		),
-	}
-
-	// Test conversion to ImportExtensionRequest
-	importReq := createReq.ToImportRequest("projects/test-project/locations/us-central1")
-	if importReq == nil {
-		t.Errorf("Expected ToImportRequest to return non-nil request")
-	}
-	if importReq.Parent != "projects/test-project/locations/us-central1" {
-		t.Errorf("ImportExtensionRequest.Parent = %v, want projects/test-project/locations/us-central1", importReq.Parent)
-	}
-	if importReq.Extension.DisplayName != "Test Extension" {
-		t.Errorf("ImportExtensionRequest.Extension.DisplayName = %v, want Test Extension", importReq.Extension.DisplayName)
-	}
-
-	// Test helper function for creating requests
-	listReq := NewListExtensionsRequest(
-		"projects/test-project/locations/us-central1",
-		10,
-		"token123",
-		"state=ACTIVE",
-		"create_time desc",
-	)
-	if listReq.Parent != "projects/test-project/locations/us-central1" {
-		t.Errorf("ListExtensionsRequest.Parent = %v, want projects/test-project/locations/us-central1", listReq.Parent)
-	}
-	if listReq.PageSize != 10 {
-		t.Errorf("ListExtensionsRequest.PageSize = %v, want 10", listReq.PageSize)
-	}
-	if listReq.PageToken != "token123" {
-		t.Errorf("ListExtensionsRequest.PageToken = %v, want token123", listReq.PageToken)
-	}
-
-	// Test GetExtensionRequest
-	getReq := NewGetExtensionRequest("projects/test-project/locations/us-central1/extensions/ext_123")
-	if getReq.Name != "projects/test-project/locations/us-central1/extensions/ext_123" {
-		t.Errorf("GetExtensionRequest.Name = %v, want projects/test-project/locations/us-central1/extensions/ext_123", getReq.Name)
-	}
-
-	// Test DeleteExtensionRequest
-	deleteReq := NewDeleteExtensionRequest("projects/test-project/locations/us-central1/extensions/ext_123")
-	if deleteReq.Name != "projects/test-project/locations/us-central1/extensions/ext_123" {
-		t.Errorf("DeleteExtensionRequest.Name = %v, want projects/test-project/locations/us-central1/extensions/ext_123", deleteReq.Name)
 	}
 }
 
@@ -283,42 +227,42 @@ func TestExtensionState(t *testing.T) {
 func TestAuthType(t *testing.T) {
 	tests := []struct {
 		name     string
-		authType AuthType
+		authType aiplatformpb.AuthType
 		expected string
 	}{
 		{
 			name:     "unspecified",
-			authType: AuthTypeUnspecified,
+			authType: aiplatformpb.AuthType_AUTH_TYPE_UNSPECIFIED,
 			expected: "AUTH_TYPE_UNSPECIFIED",
 		},
 		{
 			name:     "no auth",
-			authType: AuthTypeNoAuth,
+			authType: aiplatformpb.AuthType_NO_AUTH,
 			expected: "NO_AUTH",
 		},
 		{
 			name:     "api key",
-			authType: AuthTypeAPIKey,
+			authType: aiplatformpb.AuthType_API_KEY_AUTH,
 			expected: "API_KEY_AUTH",
 		},
 		{
 			name:     "http basic",
-			authType: AuthTypeHTTPBasic,
+			authType: aiplatformpb.AuthType_HTTP_BASIC_AUTH,
 			expected: "HTTP_BASIC_AUTH",
 		},
 		{
 			name:     "google service account",
-			authType: AuthTypeGoogleServiceAccount,
+			authType: aiplatformpb.AuthType_GOOGLE_SERVICE_ACCOUNT_AUTH,
 			expected: "GOOGLE_SERVICE_ACCOUNT_AUTH",
 		},
 		{
 			name:     "oauth",
-			authType: AuthTypeOAuth,
+			authType: aiplatformpb.AuthType_OAUTH,
 			expected: "OAUTH",
 		},
 		{
 			name:     "oidc",
-			authType: AuthTypeOIDC,
+			authType: aiplatformpb.AuthType_OIDC_AUTH,
 			expected: "OIDC_AUTH",
 		},
 	}

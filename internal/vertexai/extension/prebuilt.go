@@ -7,11 +7,13 @@ import (
 	"context"
 	"fmt"
 	"slices"
+
+	"cloud.google.com/go/aiplatform/apiv1beta1/aiplatformpb"
 )
 
 // getPrebuiltExtensionConfig returns the manifest and runtime configuration
 // for a prebuilt extension type.
-func (s *Service) getPrebuiltExtensionConfig(extensionType PrebuiltExtensionType) (*ExtensionManifest, *RuntimeConfig, error) {
+func (s *service) getPrebuiltExtensionConfig(extensionType PrebuiltExtensionType) (*aiplatformpb.ExtensionManifest, *aiplatformpb.RuntimeConfig, error) {
 	switch extensionType {
 	case PrebuiltExtensionCodeInterpreter:
 		return s.getCodeInterpreterConfig()
@@ -26,7 +28,7 @@ func (s *Service) getPrebuiltExtensionConfig(extensionType PrebuiltExtensionType
 }
 
 // getCodeInterpreterConfig returns the configuration for the code interpreter extension.
-func (s *Service) getCodeInterpreterConfig() (*ExtensionManifest, *RuntimeConfig, error) {
+func (s *service) getCodeInterpreterConfig() (*aiplatformpb.ExtensionManifest, *aiplatformpb.RuntimeConfig, error) {
 	manifest := NewExtensionManifest(
 		"code_interpreter_tool",
 		"Google Code Interpreter Extension",
@@ -43,7 +45,7 @@ func (s *Service) getCodeInterpreterConfig() (*ExtensionManifest, *RuntimeConfig
 }
 
 // getVertexAISearchConfig returns the configuration for the Vertex AI Search extension.
-func (s *Service) getVertexAISearchConfig() (*ExtensionManifest, *RuntimeConfig, error) {
+func (s *service) getVertexAISearchConfig() (*aiplatformpb.ExtensionManifest, *aiplatformpb.RuntimeConfig, error) {
 	manifest := NewExtensionManifest(
 		"vertex_ai_search",
 		"Google Vertex AI Search Extension",
@@ -62,7 +64,7 @@ func (s *Service) getVertexAISearchConfig() (*ExtensionManifest, *RuntimeConfig,
 }
 
 // getPrebuiltDisplayName returns the display name for a prebuilt extension.
-func (s *Service) getPrebuiltDisplayName(extensionType PrebuiltExtensionType) string {
+func (s *service) getPrebuiltDisplayName(extensionType PrebuiltExtensionType) string {
 	switch extensionType {
 	case PrebuiltExtensionCodeInterpreter:
 		return "Code Interpreter"
@@ -74,7 +76,7 @@ func (s *Service) getPrebuiltDisplayName(extensionType PrebuiltExtensionType) st
 }
 
 // getPrebuiltDescription returns the description for a prebuilt extension.
-func (s *Service) getPrebuiltDescription(extensionType PrebuiltExtensionType) string {
+func (s *service) getPrebuiltDescription(extensionType PrebuiltExtensionType) string {
 	switch extensionType {
 	case PrebuiltExtensionCodeInterpreter:
 		return "This extension generates and executes code in the specified language"
@@ -86,12 +88,12 @@ func (s *Service) getPrebuiltDescription(extensionType PrebuiltExtensionType) st
 }
 
 // CreateCodeInterpreterExtension creates a code interpreter extension with default configuration.
-func (s *Service) CreateCodeInterpreterExtension(ctx context.Context) (*Extension, error) {
-	return s.CreateFromHub(ctx, string(PrebuiltExtensionCodeInterpreter), nil)
+func (s *service) CreateCodeInterpreterExtension(ctx context.Context) (*Extension, error) {
+	return s.CreateFromHub(ctx, PrebuiltExtensionCodeInterpreter)
 }
 
 // CreateVertexAISearchExtension creates a Vertex AI Search extension with the specified serving config.
-func (s *Service) CreateVertexAISearchExtension(ctx context.Context, servingConfigName string) (*Extension, error) {
+func (s *service) CreateVertexAISearchExtension(ctx context.Context, servingConfigName string) (*Extension, error) {
 	if servingConfigName == "" {
 		return nil, &PrebuiltExtensionError{
 			ExtensionType: PrebuiltExtensionVertexAISearch,
@@ -109,11 +111,22 @@ func (s *Service) CreateVertexAISearchExtension(ctx context.Context, servingConf
 		vertexSearchConfig.ServingConfigName = servingConfigName
 	}
 
-	return s.CreateExtension(ctx, manifest, servingConfigName, s.getPrebuiltDisplayName(PrebuiltExtensionVertexAISearch), s.getPrebuiltDescription(PrebuiltExtensionVertexAISearch), runtimeConfig)
+	req := &aiplatformpb.ImportExtensionRequest{
+		Parent: s.GetParent(),
+		Extension: &aiplatformpb.Extension{
+			Name:          servingConfigName,
+			DisplayName:   s.getPrebuiltDisplayName(PrebuiltExtensionVertexAISearch),
+			Description:   s.getPrebuiltDescription(PrebuiltExtensionVertexAISearch),
+			Manifest:      manifest,
+			RuntimeConfig: runtimeConfig,
+		},
+	}
+
+	return s.CreateExtension(ctx, req)
 }
 
 // GetSupportedPrebuiltExtensions returns a list of supported prebuilt extension types.
-func (s *Service) GetSupportedPrebuiltExtensions() []PrebuiltExtensionType {
+func (s *service) GetSupportedPrebuiltExtensions() []PrebuiltExtensionType {
 	return []PrebuiltExtensionType{
 		PrebuiltExtensionCodeInterpreter,
 		PrebuiltExtensionVertexAISearch,
@@ -121,7 +134,7 @@ func (s *Service) GetSupportedPrebuiltExtensions() []PrebuiltExtensionType {
 }
 
 // ValidatePrebuiltExtensionType validates that the extension type is supported.
-func (s *Service) ValidatePrebuiltExtensionType(extensionType PrebuiltExtensionType) error {
+func (s *service) ValidatePrebuiltExtensionType(extensionType PrebuiltExtensionType) error {
 	supported := s.GetSupportedPrebuiltExtensions()
 	if slices.Contains(supported, extensionType) {
 		return nil

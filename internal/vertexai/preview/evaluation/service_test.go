@@ -4,7 +4,6 @@
 package evaluation
 
 import (
-	"context"
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
@@ -39,7 +38,7 @@ func TestNewService(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			ctx := context.Background()
+			ctx := t.Context()
 			service, err := NewService(ctx, tt.projectID, tt.location)
 
 			if (err != nil) != tt.wantErr {
@@ -71,7 +70,7 @@ func TestNewService(t *testing.T) {
 }
 
 func TestService_validateTask(t *testing.T) {
-	service := &Service{}
+	service := &service{}
 
 	tests := []struct {
 		name    string
@@ -155,7 +154,7 @@ func TestService_validateTask(t *testing.T) {
 }
 
 func TestService_computeBLEUScore(t *testing.T) {
-	service := &Service{}
+	service := &service{}
 
 	tests := []struct {
 		name      string
@@ -206,7 +205,7 @@ func TestService_computeBLEUScore(t *testing.T) {
 }
 
 func TestService_computeROUGE1(t *testing.T) {
-	service := &Service{}
+	service := &service{}
 
 	tests := []struct {
 		name      string
@@ -251,7 +250,7 @@ func TestService_computeROUGE1(t *testing.T) {
 }
 
 func TestService_getBigrams(t *testing.T) {
-	service := &Service{}
+	service := &service{}
 
 	tests := []struct {
 		name     string
@@ -291,7 +290,7 @@ func TestService_getBigrams(t *testing.T) {
 }
 
 func TestService_longestCommonSubsequence(t *testing.T) {
-	service := &Service{}
+	service := &service{}
 
 	tests := []struct {
 		name     string
@@ -342,7 +341,7 @@ func TestService_longestCommonSubsequence(t *testing.T) {
 }
 
 func TestService_computeToolCallScore(t *testing.T) {
-	service := &Service{}
+	service := &service{}
 
 	tests := []struct {
 		name      string
@@ -407,7 +406,7 @@ func TestService_computeToolCallScore(t *testing.T) {
 }
 
 func TestService_formatPromptTemplate(t *testing.T) {
-	service := &Service{}
+	service := &service{}
 
 	tests := []struct {
 		name     string
@@ -457,7 +456,7 @@ func TestService_formatPromptTemplate(t *testing.T) {
 }
 
 func TestService_calculateOverallScore(t *testing.T) {
-	service := &Service{}
+	service := &service{}
 
 	tests := []struct {
 		name     string
@@ -520,7 +519,7 @@ func TestService_calculateOverallScore(t *testing.T) {
 }
 
 func TestService_getTemplateForMetric(t *testing.T) {
-	service := &Service{}
+	service := &service{}
 
 	tests := []struct {
 		name       string
@@ -709,34 +708,31 @@ func TestListTemplates(t *testing.T) {
 
 // Benchmark tests for performance
 func BenchmarkComputeBLEUScore(b *testing.B) {
-	service := &Service{}
+	service := &service{}
 	candidate := "the quick brown fox jumps over the lazy dog"
 	reference := "a quick brown fox jumps over a lazy dog"
 
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		service.computeBLEUScore(candidate, reference)
 	}
 }
 
 func BenchmarkComputeROUGE1(b *testing.B) {
-	service := &Service{}
+	service := &service{}
 	candidate := "the quick brown fox jumps over the lazy dog"
 	reference := "a quick brown fox jumps over a lazy dog"
 
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		service.computeROUGE1(candidate, reference)
 	}
 }
 
 func BenchmarkLongestCommonSubsequence(b *testing.B) {
-	service := &Service{}
+	service := &service{}
 	seq1 := []string{"the", "quick", "brown", "fox", "jumps", "over", "the", "lazy", "dog"}
 	seq2 := []string{"a", "quick", "brown", "fox", "jumps", "over", "a", "lazy", "dog"}
 
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		service.longestCommonSubsequence(seq1, seq2)
 	}
 }
@@ -745,7 +741,7 @@ func BenchmarkLongestCommonSubsequence(b *testing.B) {
 func TestService_EvaluateIntegration(t *testing.T) {
 	t.Skip("Integration test requires API keys - enable manually for testing")
 
-	ctx := context.Background()
+	ctx := t.Context()
 	service, err := NewService(ctx, "your-project-id", "us-central1")
 	if err != nil {
 		t.Fatalf("Failed to create service: %v", err)
