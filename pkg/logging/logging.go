@@ -6,7 +6,6 @@ package logging
 import (
 	"context"
 	"log/slog"
-	"os"
 )
 
 // contextKey is how we find [*slog.Logger] in a [context.Context].
@@ -24,7 +23,6 @@ func FromContext(ctx context.Context) *slog.Logger {
 	if v := ctx.Value(contextKey{}); v != nil {
 		return v.(*slog.Logger)
 	}
-	return slog.New(slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{
-		Level: slog.LevelInfo,
-	}))
+
+	return slog.New(slog.DiscardHandler)
 }
