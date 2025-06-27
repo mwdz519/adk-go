@@ -7,6 +7,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -571,6 +572,7 @@ func TestWaitForConcurrentStress(t *testing.T) {
 	const numOperations = 50
 
 	counter := int64(0)
+	var mu sync.Mutex
 	results := make([]string, numOperations)
 	errors := make([]error, numOperations)
 
@@ -582,8 +584,10 @@ func TestWaitForConcurrentStress(t *testing.T) {
 				time.Sleep(time.Duration(index%10) * time.Millisecond)
 				return fmt.Sprintf("result-%d", val), nil
 			})
+			mu.Lock()
 			results[index] = result
 			errors[index] = err
+			mu.Unlock()
 		}(i)
 	}
 
@@ -591,6 +595,7 @@ func TestWaitForConcurrentStress(t *testing.T) {
 	time.Sleep(2 * time.Second)
 
 	// Check results
+	mu.Lock()
 	for i := range numOperations {
 		if errors[i] != nil {
 			t.Errorf("Operation %d failed: %v", i, errors[i])
@@ -599,6 +604,7 @@ func TestWaitForConcurrentStress(t *testing.T) {
 			t.Errorf("Operation %d returned empty result", i)
 		}
 	}
+	mu.Unlock()
 
 	finalCounter := atomic.LoadInt64(&counter)
 	if finalCounter != numOperations {
