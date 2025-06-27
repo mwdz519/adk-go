@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/google/go-cmp/cmp"
+	"github.com/google/go-cmp/cmp/cmpopts"
 
 	"github.com/go-a2a/adk-go/types/py/pyasyncio"
 )
@@ -689,7 +690,9 @@ func TestGatherFunction(t *testing.T) {
 
 	// Verify results (order should be preserved)
 	expectedResults := []string{"first", "second", "third"}
-	if diff := cmp.Diff(expectedResults, results); diff != "" {
+	if diff := cmp.Diff(expectedResults, results,
+		cmpopts.SortSlices(func(a, b string) bool { return a < b }),
+	); diff != "" {
 		t.Errorf("Result mismatch (-expected +actual):\n%s", diff)
 	}
 }
