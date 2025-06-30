@@ -7,16 +7,22 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"log/slog"
 	"strings"
 	"sync"
-	"time"
 
 	aiplatform "cloud.google.com/go/aiplatform/apiv1beta1"
 	"cloud.google.com/go/aiplatform/apiv1beta1/aiplatformpb"
+	"cloud.google.com/go/storage"
+	"github.com/go-json-experiment/json"
 	"google.golang.org/api/option"
+	"google.golang.org/genai"
+	yaml "gopkg.in/yaml.v3"
 
+	"github.com/go-a2a/adk-go/model"
 	"github.com/go-a2a/adk-go/pkg/logging"
+	"github.com/go-a2a/adk-go/types/aiconv"
 )
 
 var VertexExtensionHub = map[PrebuiltExtensionType]*aiplatformpb.ImportExtensionRequest{
@@ -75,44 +81,26 @@ var VertexExtensionHub = map[PrebuiltExtensionType]*aiplatformpb.ImportExtension
 // The service manages extension lifecycles, executes operations, and provides
 // access to prebuilt extensions from Google's extension hub.
 type Service interface {
-	// GetProjectID returns the configured Google Cloud project ID.
-	GetProjectID() string
-
-	// GetLocation returns the configured geographic location.
-	GetLocation() string
-
-	// GetParent returns the resource name of the Location to import the Extension in.
-	GetParent() string
-
 	// CreateExtension creates a new custom extension.
 	CreateExtension(ctx context.Context, req *aiplatformpb.ImportExtensionRequest) (*Extension, error)
 
-	// ExecuteExtension executes an operation on a specific extension.
+	// ResourceName returns the full qualified resource name for the extension.
+	ResourceName() string
+
+	// APISpec returns the (Open)API Spec of the extension.
+	APISpec(ctx context.Context) map[string]any
+
+	// OperationSchemas returns the (Open)API schemas for each operation of the extension.
+	OperationSchemas(ctx context.Context) map[string]any
+
+	// ExecuteExtension executes an operation of the extension with the specified params.
 	ExecuteExtension(ctx context.Context, req *aiplatformpb.ExecuteExtensionRequest) (*aiplatformpb.ExecuteExtensionResponse, error)
 
-	// CreateFromHub creates an extension from Google's prebuilt extension hub.
+	// QueryExtension queries an extension with the specified contents.
+	QueryExtension(ctx context.Context, contents any) (*aiplatformpb.QueryExtensionResponse, error)
+
+	// CreateFromHub creates a new Extension from the set of first party extensions.
 	CreateFromHub(ctx context.Context, extensionType PrebuiltExtensionType, runtimeConfig *aiplatformpb.RuntimeConfig) (*Extension, error)
-
-	// ListExtensions lists all extensions in the project and location.
-	ListExtensions(ctx context.Context, req *aiplatformpb.ListExtensionsRequest) (*aiplatformpb.ListExtensionsResponse, error)
-
-	// GetExtension retrieves a specific extension by its resource name.
-	GetExtension(ctx context.Context, req *aiplatformpb.GetExtensionRequest) (*Extension, error)
-
-	// DeleteExtension deletes an extension.
-	DeleteExtension(ctx context.Context, req *aiplatformpb.DeleteExtensionRequest) error
-
-	// ExecuteCodeInterpreter executes a code interpreter operation with simplified parameters.
-	ExecuteCodeInterpreter(ctx context.Context, extensionName, query string, files []string) (*CodeInterpreterExecutionResponse, error)
-
-	// ExecuteVertexAISearch executes a Vertex AI Search operation with simplified parameters.
-	ExecuteVertexAISearch(ctx context.Context, extensionName, query string, maxResults int32) (*VertexAISearchExecutionResponse, error)
-
-	// GetSupportedPrebuiltExtensions returns a list of supported prebuilt extension types.
-	GetSupportedPrebuiltExtensions() []PrebuiltExtensionType
-
-	// ValidatePrebuiltExtensionType validates that the extension type is supported.
-	ValidatePrebuiltExtensionType(extensionType PrebuiltExtensionType) error
 
 	// Close closes the Extension Execution service and releases any resources.
 	Close() error
@@ -129,6 +117,11 @@ type service struct {
 	logger    *slog.Logger
 
 	resourceName string
+
+	// Cached API specs
+	apiSpec          map[string]any
+	operationSchemas map[string]any
+	specMu           sync.RWMutex
 
 	// Service state
 	initialized bool
@@ -202,18 +195,24 @@ func (s *service) Close() error {
 		return nil
 	}
 
-	s.logger.Info("Closing Vertex AI Extension Execution service")
+	s.logger.Info("closing Vertex AI Extension services")
 
 	// Close AI Platform clients
 	if s.extensionExecutionClient != nil {
 		if err := s.extensionExecutionClient.Close(); err != nil {
-			s.logger.Error("Failed to close Extension Execution client", slog.String("error", err.Error()))
-			return fmt.Errorf("failed to close Extension Execution client: %w", err)
+			s.logger.Error("close Extension Execution client", slog.Any("error", err))
+			return fmt.Errorf("close Extension Execution client: %w", err)
+		}
+	}
+	if s.extensionRegistryClient != nil {
+		if err := s.extensionRegistryClient.Close(); err != nil {
+			s.logger.Error("close Extension Registry client", slog.Any("error", err))
+			return fmt.Errorf("close Extension Registry client: %w", err)
 		}
 	}
 
 	s.initialized = false
-	s.logger.Info("Vertex AI Extension Execution service closed successfully")
+	s.logger.Info("successfully closed the Vertex AI Extension services")
 
 	return nil
 }
@@ -236,18 +235,138 @@ func (s *service) CreateExtension(ctx context.Context, req *aiplatformpb.ImportE
 		return nil, fmt.Errorf("failed to wait long running operation: %w", err)
 	}
 
-	s.resourceName = createdExtension.GetName()
+	resourceName := createdExtension.GetName()
+
+	// Clear cached specs when setting new resource name
+	s.specMu.Lock()
+	s.apiSpec = nil
+	s.operationSchemas = nil
+	s.specMu.Unlock()
+
+	s.resourceName = resourceName
 
 	s.logger.InfoContext(ctx, "Extension created successfully",
-		slog.String("extension_name", createdExtension.GetName()),
+		slog.String("extension_name", resourceName),
 	)
 
-	e := &Extension{
+	ext := &Extension{
 		Extension: createdExtension,
 		State:     ExtensionStateActive,
 	}
 
-	return e, nil
+	return ext, nil
+}
+
+// ResourceName implements [Service].
+func (s *service) ResourceName() string {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	if !s.initialized {
+		return ""
+	}
+	return s.resourceName
+}
+
+// APISpec implements [Service].
+//
+// APISpec returns the complete OpenAPI specification for the extension.
+// The result is cached to avoid repeated parsing of the same specification.
+// Returns an empty map if no extension is loaded or if parsing fails.
+func (s *service) APISpec(ctx context.Context) map[string]any {
+	s.specMu.RLock()
+	if s.apiSpec != nil {
+		defer s.specMu.RUnlock()
+		return s.apiSpec
+	}
+	s.specMu.RUnlock()
+
+	// Double-checked locking pattern
+	s.specMu.Lock()
+	defer s.specMu.Unlock()
+
+	// Check again after acquiring write lock
+	if s.apiSpec != nil {
+		return s.apiSpec
+	}
+
+	// No extension available
+	if s.resourceName == "" {
+		s.logger.Debug("APISpec called but no extension resource available")
+		s.apiSpec = make(map[string]any)
+		return s.apiSpec
+	}
+
+	// Fetch and parse API spec
+	spec, err := s.getExtensionSpec(ctx)
+	if err != nil {
+		s.logger.Error("failed to get extension API spec",
+			slog.String("resource_name", s.resourceName),
+			slog.Any("error", err),
+		)
+		s.apiSpec = make(map[string]any)
+		return s.apiSpec
+	}
+
+	s.logger.Debug("successfully parsed extension API spec",
+		slog.String("resource_name", s.resourceName),
+		slog.Int("spec_keys", len(spec)),
+	)
+
+	s.apiSpec = spec
+	return s.apiSpec
+}
+
+// OperationSchemas implements [Service].
+//
+// OperationSchemas returns a map of operation schemas extracted from the OpenAPI specification.
+// Each key represents an operation ID or path+method, and the value contains the operation schema.
+// The result is cached to avoid repeated parsing of the same specification.
+// Returns an empty map if no extension is loaded or if parsing fails.
+func (s *service) OperationSchemas(ctx context.Context) map[string]any {
+	s.specMu.RLock()
+	if s.operationSchemas != nil {
+		defer s.specMu.RUnlock()
+		return s.operationSchemas
+	}
+	s.specMu.RUnlock()
+
+	// Double-checked locking pattern
+	s.specMu.Lock()
+	defer s.specMu.Unlock()
+
+	// Check again after acquiring write lock
+	if s.operationSchemas != nil {
+		return s.operationSchemas
+	}
+
+	// No extension available
+	if s.resourceName == "" {
+		s.logger.Debug("OperationSchemas called but no extension resource available")
+		s.operationSchemas = make(map[string]any)
+		return s.operationSchemas
+	}
+
+	// Get the full API spec first
+	apiSpec, err := s.getExtensionSpec(ctx)
+	if err != nil {
+		s.logger.Error("failed to get extension API spec for operation schemas",
+			slog.String("resource_name", s.resourceName),
+			slog.Any("error", err),
+		)
+		s.operationSchemas = make(map[string]any)
+		return s.operationSchemas
+	}
+
+	// Extract operation schemas
+	operationSchemas := s.extractOperationSchemas(apiSpec)
+
+	s.logger.Debug("successfully extracted operation schemas",
+		slog.String("resource_name", s.resourceName),
+		slog.Int("operation_count", len(operationSchemas)),
+	)
+
+	s.operationSchemas = operationSchemas
+	return s.operationSchemas
 }
 
 // Extension Execution Methods
@@ -268,16 +387,14 @@ func (s *service) ExecuteExtension(ctx context.Context, req *aiplatformpb.Execut
 		return nil, fmt.Errorf("operation_id is required")
 	}
 
-	s.logger.InfoContext(ctx, "Executing extension operation",
+	s.logger.InfoContext(ctx, "executing extension operation",
 		slog.String("name", req.Name),
 		slog.String("operation_id", req.OperationId),
 	)
 
-	// TODO: Implement actual API call to execute extension
-	// For now, return a mock response
-	// Create a mock response using the protobuf structure
-	_ = &aiplatformpb.ExecuteExtensionResponse{
-		Content: `{"result": "mock execution result"}`,
+	resp, err := s.extensionExecutionClient.ExecuteExtension(ctx, req)
+	if err != nil {
+		return nil, err
 	}
 
 	s.logger.InfoContext(ctx, "Extension operation executed successfully",
@@ -285,9 +402,131 @@ func (s *service) ExecuteExtension(ctx context.Context, req *aiplatformpb.Execut
 		slog.String("operation_id", req.OperationId),
 	)
 
-	return &aiplatformpb.ExecuteExtensionResponse{
-		Content: `{"result": "mock execution result"}`,
-	}, nil
+	return resp, nil
+}
+
+// ContentsType is a type constraint for the contents parameter in QueryExtension.
+type ContentsType interface {
+	[]*aiplatformpb.Content | []*genai.Content | []map[string]any | string | []string | *genai.Image | []*genai.Image | *genai.Part | []*genai.Part
+}
+
+// toContents converts different kinds of values to gapic_content_types.Content object.
+func toContents[T ContentsType](value T) *aiplatformpb.Content {
+	content := &aiplatformpb.Content{
+		Role: model.RoleUser,
+	}
+
+	items := []any{}
+	switch value := any(value).(type) {
+	case *aiplatformpb.Content:
+		return value
+	case string:
+		items = append(items, value)
+	case []string:
+		items = append(items, []any{value}...)
+	case *genai.Image:
+		items = append(items, value)
+	case []*genai.Image:
+		items = append(items, []any{value}...)
+	case *genai.Part:
+		items = append(items, value)
+	case []*genai.Part:
+		items = append(items, []any{value}...)
+	}
+
+	parts := []*aiplatformpb.Part{}
+	for _, item := range items {
+		switch item := item.(type) {
+		case *aiplatformpb.Part:
+			parts = append(parts, item)
+		case *genai.Part:
+			parts = append(parts, aiconv.ToAIPlatformPart(item))
+		case string:
+			parts = append(parts, &aiplatformpb.Part{
+				Data: &aiplatformpb.Part_Text{
+					Text: item,
+				},
+			})
+		case *genai.Image:
+			parts = append(parts, &aiplatformpb.Part{
+				Data: &aiplatformpb.Part_InlineData{
+					InlineData: &aiplatformpb.Blob{
+						MimeType: item.MIMEType,
+						Data:     item.ImageBytes,
+					},
+				},
+			})
+		case *genai.Content:
+			panic(fmt.Errorf("a list of Content objects is not supported here: %v", item))
+		default:
+			panic(fmt.Errorf("unexpected item type: %T. only types that represent a single Content or a single Part are supported here", item))
+		}
+	}
+	content.Parts = parts
+
+	return content
+}
+
+// convertAnyToContents converts any supported content type to a list of aiplatformpb.Content objects.
+func convertAnyToContents(contents any) []*aiplatformpb.Content {
+	if contents == nil {
+		return nil
+	}
+
+	switch v := contents.(type) {
+	case []*aiplatformpb.Content:
+		return v
+	case []*genai.Content:
+		return aiconv.ToAIPlatformContents(v)
+	case *aiplatformpb.Content:
+		return []*aiplatformpb.Content{v}
+	case string:
+		return []*aiplatformpb.Content{toContents(v)}
+	case []string:
+		return []*aiplatformpb.Content{toContents(v)}
+	case *genai.Image:
+		return []*aiplatformpb.Content{toContents(v)}
+	case []*genai.Image:
+		return []*aiplatformpb.Content{toContents(v)}
+	case *genai.Part:
+		return []*aiplatformpb.Content{toContents(v)}
+	case []*genai.Part:
+		return []*aiplatformpb.Content{toContents(v)}
+	case []map[string]any:
+		// Handle []map[string]any by treating it as a single content
+		parts := []*aiplatformpb.Part{}
+		for _, m := range v {
+			// Convert map to a simple text representation for now
+			// In a real implementation, you might want to handle this differently
+			parts = append(parts, &aiplatformpb.Part{
+				Data: &aiplatformpb.Part_Text{
+					Text: fmt.Sprintf("%v", m),
+				},
+			})
+		}
+		return []*aiplatformpb.Content{
+			{
+				Role:  model.RoleUser,
+				Parts: parts,
+			},
+		}
+	default:
+		panic(fmt.Errorf("unsupported content type: %T. supported types are: []*aiplatformpb.Content, []*genai.Content, string, []string, *genai.Image, []*genai.Image, *genai.Part, []*genai.Part, []map[string]any", contents))
+	}
+}
+
+// QueryExtension Queries an extension with the specified contents.
+func (s *service) QueryExtension(ctx context.Context, contents any) (*aiplatformpb.QueryExtensionResponse, error) {
+	req := &aiplatformpb.QueryExtensionRequest{
+		Name:     s.resourceName,
+		Contents: convertAnyToContents(contents),
+	}
+	resp, err := s.extensionExecutionClient.QueryExtension(ctx, req)
+	if err != nil {
+		return nil, fmt.Errorf("query extension: %w", err)
+	}
+
+	return resp, nil
 }
 
 // CreateFromHub creates an extension from Google's prebuilt extension hub.
@@ -328,170 +567,152 @@ func (s *service) CreateFromHub(ctx context.Context, extensionType PrebuiltExten
 	return extension, nil
 }
 
-// ListExtensions lists all extensions in the project and location.
-func (s *service) ListExtensions(ctx context.Context, req *aiplatformpb.ListExtensionsRequest) (*aiplatformpb.ListExtensionsResponse, error) {
-	if req == nil {
-		req = &aiplatformpb.ListExtensionsRequest{}
+// Helper methods for API spec parsing
+
+// parseGCSContent fetches content from a GCS URI and parses it as YAML or JSON.
+func (s *service) parseGCSContent(ctx context.Context, gcsURI string) (map[string]any, error) {
+	// Parse GCS URI format: gs://bucket/path
+	if !strings.HasPrefix(gcsURI, "gs://") {
+		return nil, fmt.Errorf("invalid GCS URI format: %s", gcsURI)
 	}
 
-	s.logger.InfoContext(ctx, "Listing extensions",
-		slog.Int("page_size", int(req.PageSize)),
-		slog.String("page_token", req.PageToken),
-	)
-
-	// TODO: Implement actual API call to list extensions
-	// For now, return empty response
-	response := &aiplatformpb.ListExtensionsResponse{
-		Extensions:    []*aiplatformpb.Extension{},
-		NextPageToken: "",
+	uriPath := strings.TrimPrefix(gcsURI, "gs://")
+	parts := strings.SplitN(uriPath, "/", 2)
+	if len(parts) < 2 {
+		return nil, fmt.Errorf("invalid GCS URI path: %s", gcsURI)
 	}
 
-	s.logger.InfoContext(ctx, "Listed extensions successfully",
-		slog.Int("extension_count", len(response.Extensions)),
-	)
+	bucketName := parts[0]
+	objectName := parts[1]
 
-	return response, nil
-}
-
-// GetExtension retrieves a specific extension by its resource name.
-func (s *service) GetExtension(ctx context.Context, req *aiplatformpb.GetExtensionRequest) (*Extension, error) {
-	if req == nil {
-		return nil, fmt.Errorf("request cannot be nil")
-	}
-	if req.Name == "" {
-		return nil, fmt.Errorf("name is required")
-	}
-
-	s.logger.InfoContext(ctx, "Getting extension",
-		slog.String("name", req.Name),
-	)
-
-	// TODO: Implement actual API call to get extension
-	// For now, return extension not found error
-	return nil, &ExtensionNotFoundError{
-		Name: req.Name,
-	}
-}
-
-// DeleteExtension deletes an extension.
-func (s *service) DeleteExtension(ctx context.Context, req *aiplatformpb.DeleteExtensionRequest) error {
-	if req == nil {
-		return fmt.Errorf("request cannot be nil")
-	}
-	if req.Name == "" {
-		return fmt.Errorf("name is required")
-	}
-
-	s.logger.InfoContext(ctx, "Deleting extension",
-		slog.String("name", req.Name),
-	)
-
-	// TODO: Implement actual API call to delete extension
-	s.logger.InfoContext(ctx, "Extension deleted successfully",
-		slog.String("name", req.Name),
-	)
-
-	return nil
-}
-
-// Convenience Methods for Prebuilt Extensions
-
-// ExecuteCodeInterpreter executes a code interpreter operation with simplified parameters.
-func (s *service) ExecuteCodeInterpreter(ctx context.Context, extensionName, query string, files []string) (*CodeInterpreterExecutionResponse, error) {
-	req := &aiplatformpb.ExecuteExtensionRequest{
-		Name:        extensionName,
-		OperationId: "generate_and_execute",
-		// Note: OperationParams should be *structpb.Struct, but for now we'll handle conversion later
-		// OperationParams: ...,  // TODO: Convert map to structpb.Struct
-	}
-
-	_, err := s.ExecuteExtension(ctx, req)
+	// Create GCS client
+	client, err := storage.NewClient(ctx)
 	if err != nil {
-		return nil, fmt.Errorf("failed to execute code interpreter: %w", err)
+		return nil, fmt.Errorf("failed to create GCS client: %w", err)
 	}
+	defer client.Close()
 
-	// TODO: Parse response into CodeInterpreterExecutionResponse
-	// For now, return a mock response
-	return &CodeInterpreterExecutionResponse{
-		GeneratedCode:   "# Generated code would be here",
-		ExecutionResult: "Execution result would be here",
-		ExecutionError:  "",
-		OutputFiles:     []string{},
-	}, nil
-}
-
-// ExecuteVertexAISearch executes a Vertex AI Search operation with simplified parameters.
-func (s *service) ExecuteVertexAISearch(ctx context.Context, extensionName, query string, maxResults int32) (*VertexAISearchExecutionResponse, error) {
-	req := &aiplatformpb.ExecuteExtensionRequest{
-		Name:        extensionName,
-		OperationId: "search",
-		// Note: OperationParams should be *structpb.Struct, but for now we'll handle conversion later
-		// OperationParams: ...,  // TODO: Convert map to structpb.Struct
-	}
-
-	_, err := s.ExecuteExtension(ctx, req)
+	// Fetch object content
+	obj := client.Bucket(bucketName).Object(objectName)
+	reader, err := obj.NewReader(ctx)
 	if err != nil {
-		return nil, fmt.Errorf("failed to execute Vertex AI Search: %w", err)
+		return nil, fmt.Errorf("failed to read GCS object %s: %w", gcsURI, err)
+	}
+	defer reader.Close()
+
+	content, err := io.ReadAll(reader)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read content from %s: %w", gcsURI, err)
 	}
 
-	// TODO: Parse response into VertexAISearchExecutionResponse
-	// For now, return a mock response
-	return &VertexAISearchExecutionResponse{
-		Results:       []SearchResult{},
-		NextPageToken: "",
-	}, nil
+	// Parse content based on file extension
+	var spec map[string]any
+	if strings.HasSuffix(objectName, ".yaml") || strings.HasSuffix(objectName, ".yml") {
+		if err := yaml.Unmarshal(content, &spec); err != nil {
+			return nil, fmt.Errorf("failed to parse YAML from %s: %w", gcsURI, err)
+		}
+	} else if strings.HasSuffix(objectName, ".json") {
+		if err := json.Unmarshal(content, &spec); err != nil {
+			return nil, fmt.Errorf("failed to parse JSON from %s: %w", gcsURI, err)
+		}
+	} else {
+		// Try YAML first, then JSON
+		if err := yaml.Unmarshal(content, &spec); err != nil {
+			if jsonErr := json.Unmarshal(content, &spec); jsonErr != nil {
+				return nil, fmt.Errorf("failed to parse content as YAML or JSON from %s: yaml error: %v, json error: %v", gcsURI, err, jsonErr)
+			}
+		}
+	}
+
+	return spec, nil
 }
 
-// Helper Methods
+// extractOperationSchemas extracts operation schemas from a full OpenAPI specification.
+func (s *service) extractOperationSchemas(apiSpec map[string]any) map[string]any {
+	operationSchemas := make(map[string]any)
 
-// generateExtensionID generates a unique extension ID.
-func (s *service) generateExtensionID() string {
-	// In a real implementation, this would generate a unique ID
-	return fmt.Sprintf("ext_%d", time.Now().UnixNano())
+	// Extract paths and their operations
+	if paths, ok := apiSpec["paths"].(map[string]any); ok {
+		for path, pathItem := range paths {
+			if pathItemMap, ok := pathItem.(map[string]any); ok {
+				for method, operation := range pathItemMap {
+					if operationMap, ok := operation.(map[string]any); ok {
+						if operationID, exists := operationMap["operationId"]; exists {
+							// Use operationId as key if available
+							if operationIDStr, ok := operationID.(string); ok {
+								operationSchemas[operationIDStr] = operationMap
+							}
+						} else {
+							// Use path+method as key if no operationId
+							key := fmt.Sprintf("%s_%s", strings.ToUpper(method), strings.ReplaceAll(path, "/", "_"))
+							operationSchemas[key] = operationMap
+						}
+					}
+				}
+			}
+		}
+	}
+
+	// Also include component schemas if available
+	if components, ok := apiSpec["components"].(map[string]any); ok {
+		if schemas, ok := components["schemas"].(map[string]any); ok {
+			for schemaName, schema := range schemas {
+				operationSchemas[fmt.Sprintf("schema_%s", schemaName)] = schema
+			}
+		}
+	}
+
+	return operationSchemas
 }
 
-// generateExtensionName generates the full resource name for an extension.
-func (s *service) generateExtensionName(extensionID string) string {
-	return fmt.Sprintf("projects/%s/locations/%s/extensions/%s", s.projectID, s.location, extensionID)
-}
-
-// validateManifest validates an extension manifest.
-func (s *service) validateManifest(manifest *aiplatformpb.ExtensionManifest) error {
-	if manifest.Name == "" {
-		return fmt.Errorf("manifest name is required")
-	}
-	if manifest.Description == "" {
-		return fmt.Errorf("manifest description is required")
-	}
-	if manifest.ApiSpec == nil {
-		return fmt.Errorf("API specification is required")
+// getExtensionSpec fetches and parses the API specification for the current extension.
+func (s *service) getExtensionSpec(ctx context.Context) (map[string]any, error) {
+	if s.resourceName == "" {
+		return nil, fmt.Errorf("no extension created yet")
 	}
 
-	// Check the API spec type
-	switch apiSpec := manifest.ApiSpec.ApiSpec.(type) {
+	// Get extension details
+	getReq := &aiplatformpb.GetExtensionRequest{
+		Name: s.resourceName,
+	}
+
+	extension, err := s.extensionRegistryClient.GetExtension(ctx, getReq)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get extension %s: %w", s.resourceName, err)
+	}
+
+	manifest := extension.GetManifest()
+	if manifest == nil {
+		return nil, fmt.Errorf("extension %s has no manifest", s.resourceName)
+	}
+
+	apiSpec := manifest.GetApiSpec()
+	if apiSpec == nil {
+		return nil, fmt.Errorf("extension %s has no API spec", s.resourceName)
+	}
+
+	// Handle different API spec formats
+	var spec map[string]any
+
+	switch apiSpecType := apiSpec.GetApiSpec().(type) {
 	case *aiplatformpb.ExtensionManifest_ApiSpec_OpenApiGcsUri:
-		if apiSpec.OpenApiGcsUri == "" {
-			return fmt.Errorf("OpenAPI GCS URI is required")
+		// Fetch from GCS
+		spec, err = s.parseGCSContent(ctx, apiSpecType.OpenApiGcsUri)
+		if err != nil {
+			return nil, fmt.Errorf("failed to parse GCS API spec: %w", err)
 		}
-		if !strings.HasPrefix(apiSpec.OpenApiGcsUri, "gs://") {
-			return fmt.Errorf("OpenAPI GCS URI must start with gs://")
-		}
+
 	case *aiplatformpb.ExtensionManifest_ApiSpec_OpenApiYaml:
-		if apiSpec.OpenApiYaml == "" {
-			return fmt.Errorf("OpenAPI YAML is required")
+		// Parse inline YAML
+		if err := yaml.Unmarshal([]byte(apiSpecType.OpenApiYaml), &spec); err != nil {
+			return nil, fmt.Errorf("failed to parse inline YAML API spec: %w", err)
 		}
+
 	default:
-		return fmt.Errorf("API specification must be either GCS URI or YAML")
+		return nil, fmt.Errorf("unsupported API spec format")
 	}
 
-	if manifest.AuthConfig == nil {
-		return fmt.Errorf("authentication configuration is required")
-	}
-	if manifest.AuthConfig.AuthType == aiplatformpb.AuthType_AUTH_TYPE_UNSPECIFIED {
-		return fmt.Errorf("authentication type must be specified")
-	}
-
-	return nil
+	return spec, nil
 }
 
 // Configuration Access Methods
