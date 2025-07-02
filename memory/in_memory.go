@@ -49,7 +49,7 @@ func (s *InMemoryService) extractWordsLower(text string) py.Set[string] {
 	return py.NewSet(strings.ToLower(text))
 }
 
-// AddSessionToMemory implements [Service].
+// AddSessionToMemory implements [types.MemoryService].
 func (s *InMemoryService) AddSessionToMemory(ctx context.Context, session types.Session) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -64,7 +64,7 @@ func (s *InMemoryService) AddSessionToMemory(ctx context.Context, session types.
 	return nil
 }
 
-// SearchMemory implements [Service].
+// SearchMemory implements [types.MemoryService].
 func (s *InMemoryService) SearchMemory(ctx context.Context, appName, userID, query string) (*types.SearchMemoryResponse, error) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
@@ -106,4 +106,10 @@ func (s *InMemoryService) SearchMemory(ctx context.Context, appName, userID, que
 	}
 
 	return response, nil
+}
+
+// SearchMemory implements [types.MemoryService].
+func (s *InMemoryService) Close() error {
+	// nothing to do
+	return nil
 }

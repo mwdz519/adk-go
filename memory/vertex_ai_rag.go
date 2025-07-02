@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/go-json-experiment/json"
+	"google.golang.org/api/option"
 	"google.golang.org/genai"
 
 	"github.com/go-a2a/adk-go/internal/pool"
@@ -57,7 +58,7 @@ func WithVectorDistanceThreshold(threshold float64) VertexAIRagOption {
 }
 
 // NewVertexAIRagService creates a new VertexAIRagService.
-func NewVertexAIRagService(ctx context.Context, projectID, location, ragCorpus string, opts ...vertexai.ClientOption) (*VertexAIRagService, error) {
+func NewVertexAIRagService(ctx context.Context, projectID, location, ragCorpus string, opts ...option.ClientOption) (*VertexAIRagService, error) {
 	client, err := vertexai.NewClient(ctx, projectID, location, opts...)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create RAG client: %w", err)
@@ -69,9 +70,6 @@ func NewVertexAIRagService(ctx context.Context, projectID, location, ragCorpus s
 		similarityTopK:          5,   // Default value
 		vectorDistanceThreshold: 0.7, // Default value
 		logger:                  slog.Default(),
-	}
-	for _, opt := range opts {
-		opt(s.client)
 	}
 
 	vertexGagStore := &genai.VertexRAGStore{

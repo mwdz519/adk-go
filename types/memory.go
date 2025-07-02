@@ -19,6 +19,9 @@ type MemoryService interface {
 
 	// SearchMemory searches for sessions that match the query.
 	SearchMemory(ctx context.Context, appName, userID, query string) (*SearchMemoryResponse, error)
+
+	// Close closes the underlying memory client and releases resources.
+	Close() error
 }
 
 // MemoryEntry represents an one memory entry.
