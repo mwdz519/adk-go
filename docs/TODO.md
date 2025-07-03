@@ -42,6 +42,44 @@ Based on comprehensive comparison with Python ADK (google/adk-python), the follo
 - [ ] LangGraph agent integration
 - [ ] CrewAI tool integration
 
+
+| Name                                | Status | Description |
+|:------------------------------------|:------:|:-----------:|
+| apihub_tool/                         |       |             |
+| application_integration_tool/        |       |             |
+| bigquery/                            |       |             |
+| google_api_tool/                     |       |             |
+| mcp_tool/                            |       |             |
+| openapi_tool/                        |       |             |
+| retrieval/                           |       |             |
+| _automatic_function_calling_util.py  |  ✔️   |             |
+| _forwarding_artifact_service.py      |  ✔️   |             |
+| _function_parameter_parse_util.py    |       |             |
+| _gemini_schema_util.py               |       |             |
+| _memory_entry_utils.py               |       |             |
+| agent_tool.py                        |  ✔️   |             |
+| base_tool.py                         |  ✔️   |             |
+| base_toolset.py                      |  ✔️   |             |
+| crewai_tool.py                       |       |             |
+| enterprise_search_tool.py            |       |             |
+| example_tool.py                      |  ✔️   |             |
+| exit_loop_tool.py                    |  ✔️   |             |
+| function_tool.py                     |  ✔️   |             |
+| get_user_choice_tool.py              |       |             |
+| google_search_tool.py                |       |             |
+| langchain_tool.py                    |       |             |
+| load_artifacts_tool.py               |       |             |
+| load_memory_tool.py                  |       |             |
+| load_web_page.py                     |       |             |
+| long_running_tool.py                 |       |             |
+| preload_memory_tool.py               |       |             |
+| tool_context.py                      |       |             |
+| toolbox_toolset.py                   |       |             |
+| transfer_to_agent_tool.py            |       |             |
+| url_context_tool.py                  |       |             |
+| vertex_ai_search_tool.py             |       |             |
+
+
 ### 4. Advanced Vertex AI Integration
 - [ ] Vertex AI Memory Bank Service
 - [ ] Vertex AI RAG Memory Service (beyond current placeholder)
