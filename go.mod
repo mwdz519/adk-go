@@ -8,8 +8,8 @@ require (
 	cloud.google.com/go/speech v1.28.0
 	cloud.google.com/go/storage v1.55.0
 	github.com/MakeNowJust/heredoc/v2 v2.0.1
-	github.com/anthropics/anthropic-sdk-go v1.4.0
-	github.com/docker/docker v28.3.0+incompatible
+	github.com/anthropics/anthropic-sdk-go v1.5.0
+	github.com/docker/docker v28.3.1+incompatible
 	github.com/go-json-experiment/json v0.0.0-20250626171732-1a886bd29d1b
 	github.com/google/dotprompt/go v0.0.0-20250614133328-417a534d0fc6
 	github.com/google/go-cmp v0.7.0
