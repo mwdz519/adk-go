@@ -60,3 +60,16 @@ func CreateOAuth2Session(ctx context.Context, authScheme AuthScheme, authCredent
 		State: authCredential.OAuth2.State,
 	}
 }
+
+// UpdateCredentialWithTokens update the credential with new tokens.
+func UpdateCredentialWithTokens(authCredential *AuthCredential, token *oauth2.Token) *AuthCredential {
+	authCredsCopy := new(AuthCredential)
+	*authCredsCopy = *authCredential
+
+	authCredsCopy.OAuth2.AccessToken = token.AccessToken
+	authCredsCopy.OAuth2.RefreshToken = token.RefreshToken
+	authCredsCopy.OAuth2.ExpiresAt = token.Expiry
+	authCredsCopy.OAuth2.ExpiresIn = token.ExpiresIn
+
+	return authCredsCopy
+}
