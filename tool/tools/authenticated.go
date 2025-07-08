@@ -1,0 +1,88 @@
+// Copyright 2025 The Go A2A Authors
+// SPDX-License-Identifier: Apache-2.0
+
+package tools
+
+import (
+	"context"
+	"log/slog"
+
+	"github.com/go-a2a/adk-go/tool"
+	"github.com/go-a2a/adk-go/types"
+)
+
+// AuthenticatedTool is a handles authentication before the actual tool logic
+// gets called. Functions can accept a special `credential` argument which is the
+// credential ready for use.
+//
+// # Experimental
+//
+// This feature is experimental and may change or be removed in future versions without notice. It may
+// introduce breaking changes at any time.
+type AuthenticatedTool struct {
+	*tool.Tool
+
+	logger                  *slog.Logger
+	credentialsManager      *types.CredentialManager
+	responseForAuthRequired map[string]any
+}
+
+var _ types.AuthenticatedTool = (*AuthenticatedTool)(nil)
+
+// NewAuthenticatedTool creates a new authenticated tool with the given name, description, authConfig, and responseForAuthRequired.
+func NewAuthenticatedTool(name, description string, authConfig *types.AuthConfig, responseForAuthRequired map[string]any) *AuthenticatedTool {
+	at := &AuthenticatedTool{
+		Tool:                    tool.NewTool(name, description, false),
+		logger:                  slog.Default(),
+		responseForAuthRequired: responseForAuthRequired,
+	}
+	if at.responseForAuthRequired == nil {
+		at.responseForAuthRequired = make(map[string]any)
+	}
+
+	if authConfig != nil && authConfig.AuthScheme != nil {
+		at.credentialsManager = types.NewCredentialManager(authConfig)
+	} else {
+		at.logger.Warn("auth_config or auth_config.auth_scheme is missing. Will skip authentication.Using FunctionTool instead if authentication is not required")
+	}
+
+	return at
+}
+
+// Name implements [types.AuthenticatedTool].
+func (t *AuthenticatedTool) Name() string {
+	return t.Tool.Name()
+}
+
+// Description implements [types.AuthenticatedTool].
+func (t *AuthenticatedTool) Description() string {
+	return t.Tool.Description()
+}
+
+// IsLongRunning implements [types.AuthenticatedTool].
+func (t *AuthenticatedTool) IsLongRunning() bool {
+	return t.Tool.IsLongRunning()
+}
+
+// Run implements [types.AuthenticatedTool].
+func (t *AuthenticatedTool) Run(ctx context.Context, args map[string]any, toolCtx *types.ToolContext) (any, error) {
+	var credential *types.AuthCredential
+	if t.credentialsManager != nil {
+		var err error
+		credential, err = t.credentialsManager.GetAuthCredential(ctx, toolCtx)
+		if err != nil {
+			return nil, err
+		}
+		if credential == nil {
+			t.credentialsManager.RequestCredential(ctx, toolCtx)
+			return t.responseForAuthRequired, nil
+		}
+	}
+
+	return t.Execute(ctx, args, toolCtx, credential)
+}
+
+// Execute implements [types.AuthenticatedTool].
+func (t *AuthenticatedTool) Execute(ctx context.Context, args map[string]any, toolCtx *types.ToolContext, credential *types.AuthCredential) (any, error) {
+	return nil, nil
+}
