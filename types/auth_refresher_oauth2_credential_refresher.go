@@ -1,24 +1,23 @@
 // Copyright 2025 The Go A2A Authors
 // SPDX-License-Identifier: Apache-2.0
 
-package refresher
+package types
 
 import (
 	"context"
 	"fmt"
 	"time"
 
-	"github.com/go-a2a/adk-go/types"
 	"golang.org/x/oauth2"
 )
 
 // OAuth2CredentialRefresher Refreshes OAuth2 credentials including Google OAuth2 JSON credentials.
 type OAuth2CredentialRefresher struct{}
 
-var _ types.CredentialRefresher = (*OAuth2CredentialRefresher)(nil)
+var _ CredentialRefresher = (*OAuth2CredentialRefresher)(nil)
 
 // IsRefreshNeeded implements [types.CredentialRefresher].
-func (r *OAuth2CredentialRefresher) IsRefreshNeeded(ctx context.Context, authCredential *types.AuthCredential, authScheme types.AuthScheme) bool {
+func (r *OAuth2CredentialRefresher) IsRefreshNeeded(ctx context.Context, authCredential *AuthCredential, authScheme AuthScheme) bool {
 	if authCredential.OAuth2 != nil {
 		tok := &oauth2.Token{
 			AccessToken: authCredential.OAuth2.AccessToken,
@@ -31,10 +30,10 @@ func (r *OAuth2CredentialRefresher) IsRefreshNeeded(ctx context.Context, authCre
 }
 
 // Refresh implements [types.CredentialRefresher].
-func (r *OAuth2CredentialRefresher) Refresh(ctx context.Context, authCredential *types.AuthCredential, authScheme types.AuthScheme) (*types.AuthCredential, error) {
+func (r *OAuth2CredentialRefresher) Refresh(ctx context.Context, authCredential *AuthCredential, authScheme AuthScheme) (*AuthCredential, error) {
 	if authCredential.OAuth2 != nil && authScheme != nil {
 		if r.IsRefreshNeeded(ctx, authCredential, authScheme) {
-			client := types.CreateOAuth2Session(ctx, authScheme, authCredential)
+			client := CreateOAuth2Session(ctx, authScheme, authCredential)
 			if client == nil {
 				return authCredential, nil
 			}
@@ -53,7 +52,7 @@ func (r *OAuth2CredentialRefresher) Refresh(ctx context.Context, authCredential 
 				return nil, fmt.Errorf("refresh token: %w", err)
 			}
 
-			newAuthCredential := types.UpdateCredentialWithTokens(authCredential, newToken)
+			newAuthCredential := UpdateCredentialWithTokens(authCredential, newToken)
 			return newAuthCredential, nil
 		}
 	}
