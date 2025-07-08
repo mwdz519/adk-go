@@ -85,9 +85,10 @@ func (mgr *InvocationCostManager) IncrementAndEnforceLLMCallsLimit(runConfig *Ru
 //	┌──── step_1 ────────┐ ┌───── step_2 ──────┐
 //	[call_llm] [call_tool] [call_llm] [transfer]
 type InvocationContext struct {
-	ArtifactService ArtifactService
-	SessionService  SessionService
-	MemoryService   MemoryService
+	ArtifactService   ArtifactService
+	SessionService    SessionService
+	MemoryService     MemoryService
+	CredentialService CredentialService
 
 	// InvocationID is the id of this invocation context. Readonly.
 	InvocationID string
