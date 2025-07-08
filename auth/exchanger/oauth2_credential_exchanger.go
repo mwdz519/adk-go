@@ -60,11 +60,7 @@ func (e *OAuth2CredentialExchanger) Exchange(ctx context.Context, authCredential
 		return nil, fmt.Errorf("failed to exchange code for token: %w", err)
 	}
 
-	authCredential.OAuth2.AccessToken = token.AccessToken
-	authCredential.OAuth2.RefreshToken = token.RefreshToken
-	authCredential.OAuth2.RefreshToken = token.RefreshToken
-	authCredential.OAuth2.ExpiresAt = token.Expiry
-	authCredential.OAuth2.ExpiresIn = token.ExpiresIn
+	newAuthCredential := types.UpdateCredentialWithTokens(authCredential, token)
 
-	return authCredential, nil
+	return newAuthCredential, nil
 }
