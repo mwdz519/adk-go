@@ -3,6 +3,10 @@
 
 package types
 
+import (
+	"time"
+)
+
 type HTTPCredentials struct {
 	Username string `json:"username"`
 	Password string `json:"password"`
@@ -29,11 +33,13 @@ type OAuth2Auth struct {
 	AuthURI string `json:"auth_uri,omitzero"`
 	State   string `json:"state,omitzero"`
 	// tool or adk can decide the redirect_uri if they don't want client to decide
-	RedirectURI     string `json:"redirect_uri,omitzero"`
-	AuthResponseURI string `json:"auth_response_uri,omitzero"`
-	AuthCode        string `json:"auth_code,omitzero"`
-	AccessToken     string `json:"access_token,omitzero"`
-	RefreshToken    string `json:"refresh_token,omitzero"`
+	RedirectURI     string    `json:"redirect_uri,omitzero"`
+	AuthResponseURI string    `json:"auth_response_uri,omitzero"`
+	AuthCode        string    `json:"auth_code,omitzero"`
+	AccessToken     string    `json:"access_token,omitzero"`
+	RefreshToken    string    `json:"refresh_token,omitzero"`
+	ExpiresAt       time.Time `json:"expires_at,omitzero"`
+	ExpiresIn       int64     `json:"expires_in,omitzero"`
 }
 
 // ServiceAccountCredential represents Google Service Account configuration.
