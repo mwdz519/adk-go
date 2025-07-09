@@ -13,5 +13,6 @@ import (
 type AuthenticatedTool interface {
 	Tool
 
+	// Execute executes the tool logic with the provided arguments, tool context, and authentication credential.
 	Execute(ctx context.Context, args map[string]any, toolCtx *ToolContext, credential *AuthCredential) (any, error)
 }
