@@ -22,28 +22,38 @@ import (
 type AuthenticatedTool struct {
 	*tool.Tool
 
-	logger                  *slog.Logger
+	Logger                  *slog.Logger
 	credentialsManager      *types.CredentialManager
 	responseForAuthRequired map[string]any
 }
 
 var _ types.AuthenticatedTool = (*AuthenticatedTool)(nil)
 
+// AuthenticatedToolOption configures an [AuthenticatedTool].
+type AuthenticatedToolOption func(*AuthenticatedTool)
+
+// WithResponseForAuthRequired sets the authRequired response for the [AuthenticatedTool].
+func WithResponseForAuthRequired(authRequired map[string]any) AuthenticatedToolOption {
+	return func(t *AuthenticatedTool) {
+		t.responseForAuthRequired = authRequired
+	}
+}
+
 // NewAuthenticatedTool creates a new authenticated tool with the given name, description, authConfig, and responseForAuthRequired.
-func NewAuthenticatedTool(name, description string, authConfig *types.AuthConfig, responseForAuthRequired map[string]any) *AuthenticatedTool {
+func NewAuthenticatedTool(name, description string, authConfig *types.AuthConfig, opts ...AuthenticatedToolOption) *AuthenticatedTool {
 	at := &AuthenticatedTool{
 		Tool:                    tool.NewTool(name, description, false),
-		logger:                  slog.Default(),
-		responseForAuthRequired: responseForAuthRequired,
+		Logger:                  slog.Default(),
+		responseForAuthRequired: make(map[string]any),
 	}
-	if at.responseForAuthRequired == nil {
-		at.responseForAuthRequired = make(map[string]any)
+	for _, opt := range opts {
+		opt(at)
 	}
 
 	if authConfig != nil && authConfig.AuthScheme != nil {
 		at.credentialsManager = types.NewCredentialManager(authConfig)
 	} else {
-		at.logger.Warn("auth_config or auth_config.auth_scheme is missing. Will skip authentication.Using FunctionTool instead if authentication is not required")
+		at.Logger.Warn("authConfig or authConfig.AuthScheme is missing. Will skip authentication. Using FunctionTool instead if authentication is not required")
 	}
 
 	return at
