@@ -11,6 +11,7 @@ import (
 	"github.com/google/go-cmp/cmp"
 	"google.golang.org/genai"
 
+	"github.com/go-a2a/adk-go/types"
 	"github.com/go-a2a/adk-go/types/aiconv"
 )
 
@@ -18,7 +19,7 @@ import (
 func TestToPtr(t *testing.T) {
 	t.Run("string", func(t *testing.T) {
 		str := "test"
-		ptr := aiconv.ToPtr(str)
+		ptr := types.ToPtr(str)
 		if ptr == nil {
 			t.Fatal("expected non-nil pointer")
 		}
@@ -29,7 +30,7 @@ func TestToPtr(t *testing.T) {
 
 	t.Run("int", func(t *testing.T) {
 		val := 42
-		ptr := aiconv.ToPtr(val)
+		ptr := types.ToPtr(val)
 		if ptr == nil {
 			t.Fatal("expected non-nil pointer")
 		}
@@ -43,7 +44,7 @@ func TestDeref(t *testing.T) {
 	t.Run("non-nil pointer", func(t *testing.T) {
 		str := "test"
 		ptr := &str
-		result := aiconv.Deref(ptr, "default")
+		result := types.Deref(ptr, "default")
 		if result != str {
 			t.Errorf("expected %q, got %q", str, result)
 		}
@@ -52,7 +53,7 @@ func TestDeref(t *testing.T) {
 	t.Run("nil pointer", func(t *testing.T) {
 		var ptr *string
 		def := "default"
-		result := aiconv.Deref(ptr, def)
+		result := types.Deref(ptr, def)
 		if result != def {
 			t.Errorf("expected %q, got %q", def, result)
 		}

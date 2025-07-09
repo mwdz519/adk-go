@@ -10,20 +10,9 @@ import (
 	"google.golang.org/genai"
 	"google.golang.org/protobuf/types/known/durationpb"
 	"google.golang.org/protobuf/types/known/structpb"
+
+	"github.com/go-a2a/adk-go/types"
 )
-
-// ToPtr returns a pointer to the given value.
-func ToPtr[T any](v T) *T {
-	return &v
-}
-
-// Deref dereferences ptr and returns the value it points to if no nil, or else returns def.
-func Deref[T any](ptr *T, def T) T {
-	if ptr != nil {
-		return *ptr
-	}
-	return def
-}
 
 // Content Conversions
 
@@ -891,7 +880,7 @@ func ToAIPlatformCandidate(c *genai.Candidate) *aiplatformpb.Candidate {
 		Index:              c.Index,
 		Content:            ToAIPlatformContent(c.Content),
 		FinishReason:       ToAIPlatformFinishReason(c.FinishReason),
-		FinishMessage:      ToPtr(c.FinishMessage),
+		FinishMessage:      types.ToPtr(c.FinishMessage),
 		SafetyRatings:      ToAIPlatformSafetyRatings(c.SafetyRatings),
 		CitationMetadata:   ToAIPlatformCitationMetadata(c.CitationMetadata),
 		AvgLogprobs:        c.AvgLogprobs,
@@ -914,7 +903,7 @@ func FromAIPlatformCandidate(c *aiplatformpb.Candidate) *genai.Candidate {
 		Index:              c.Index,
 		Content:            FromAIPlatformContent(c.Content),
 		FinishReason:       FromAIPlatformFinishReason(c.FinishReason),
-		FinishMessage:      Deref(c.FinishMessage, ""),
+		FinishMessage:      types.Deref(c.FinishMessage, ""),
 		SafetyRatings:      FromAIPlatformSafetyRatings(c.SafetyRatings),
 		CitationMetadata:   FromAIPlatformCitationMetadata(c.CitationMetadata),
 		AvgLogprobs:        c.AvgLogprobs,
@@ -1490,7 +1479,7 @@ func FromAIPlatformLogprobsResult(lr *aiplatformpb.LogprobsResult) *genai.Logpro
 				result.TopCandidates[i].Candidates = make([]*genai.LogprobsResultCandidate, len(tc.Candidates))
 				for j, c := range tc.Candidates {
 					result.TopCandidates[i].Candidates[j] = &genai.LogprobsResultCandidate{
-						Token:          Deref(c.Token, ""),
+						Token:          types.Deref(c.Token, ""),
 						TokenID:        FromInt32PtrToInt32(c.TokenId),
 						LogProbability: FromFloat32Ptr(c.LogProbability),
 					}
@@ -1504,7 +1493,7 @@ func FromAIPlatformLogprobsResult(lr *aiplatformpb.LogprobsResult) *genai.Logpro
 		result.ChosenCandidates = make([]*genai.LogprobsResultCandidate, len(lr.ChosenCandidates))
 		for i, c := range lr.ChosenCandidates {
 			result.ChosenCandidates[i] = &genai.LogprobsResultCandidate{
-				Token:          Deref(c.Token, ""),
+				Token:          types.Deref(c.Token, ""),
 				TokenID:        FromInt32PtrToInt32(c.TokenId),
 				LogProbability: FromFloat32Ptr(c.LogProbability),
 			}
