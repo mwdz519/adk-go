@@ -14,35 +14,12 @@ import (
 	"github.com/go-json-experiment/json"
 	"google.golang.org/genai"
 
-	"github.com/go-a2a/adk-go/flow/llmprocessor"
+	"github.com/go-a2a/adk-go/flow/llmflow"
 	"github.com/go-a2a/adk-go/internal/pool"
 	"github.com/go-a2a/adk-go/internal/xiter"
 	"github.com/go-a2a/adk-go/model"
 	"github.com/go-a2a/adk-go/tool/tools"
 	"github.com/go-a2a/adk-go/types"
-)
-
-// InstructionProvider is a function that provides instructions based on context.
-type InstructionProvider func(rctx *types.ReadOnlyContext) string
-
-// BeforeModelCallback is called before sending a request to the model.
-type BeforeModelCallback func(cctx *types.CallbackContext, request *types.LLMRequest) (*types.LLMResponse, error)
-
-// AfterModelCallback is called after receiving a response from the model.
-type AfterModelCallback func(cctx *types.CallbackContext, response *types.LLMResponse) (*types.LLMResponse, error)
-
-// BeforeToolCallback is called before executing a tool.
-type BeforeToolCallback func(tool types.Tool, args map[string]any, toolCtx *types.ToolContext) (map[string]any, error)
-
-// AfterToolCallback is called after executing a tool.
-type AfterToolCallback func(tool types.Tool, args map[string]any, toolCtx *types.ToolContext, toolResponse map[string]any) (map[string]any, error)
-
-// IncludeContents whether to include contents in the model request.
-type IncludeContents string
-
-const (
-	IncludeContentsDefault IncludeContents = "default"
-	IncludeContentsNone    IncludeContents = "none"
 )
 
 // LLMAgent represents an agent powered by a Large Language Model.
@@ -87,7 +64,7 @@ type LLMAgent struct {
 	//
 	// When set to 'none', the model request will not include any contents, such as
 	// user messages, tool results, etc.
-	includeContents IncludeContents
+	includeContents types.IncludeContents
 
 	// The input schema when agent is used as a tool.
 	inputSchema *genai.Schema
@@ -128,28 +105,33 @@ type LLMAgent struct {
 	//
 	// When a list of callbacks is provided, the callbacks will be called in the
 	// order they are listed until a callback does not return None.
-	beforeModelCallbacks []BeforeModelCallback
+	beforeModelCallbacks []types.BeforeModelCallback
 
 	// Callback or list of callbacks to be called after calling the LLM.
 	//
 	// When a list of callbacks is provided, the callbacks will be called in the
 	// order they are listed until a callback does not return None.
-	afterModelCallbacks []AfterModelCallback
+	afterModelCallbacks []types.AfterModelCallback
 
 	// Callback or list of callbacks to be called before calling the tool.
 	//
 	// When a list of callbacks is provided, the callbacks will be called in the
 	// order they are listed until a callback does not return None.
-	beforeToolCallbacks []BeforeToolCallback
+	beforeToolCallbacks []types.BeforeToolCallback
 
 	// Callback or list of callbacks to be called after calling the tool.
 	//
 	// When a list of callbacks is provided, the callbacks will be called in the
 	// order they are listed until a callback does not return None.
-	afterToolCallbacks []AfterToolCallback
+	afterToolCallbacks []types.AfterToolCallback
 }
 
 var _ types.Agent = (*LLMAgent)(nil)
+
+// AsLLMAgent implements [types.Agent].
+func (a *LLMAgent) AsLLMAgent() (types.LLMAgent, bool) {
+	return a, true
+}
 
 // LLMAgentOption configures an [LLMAgent].
 type LLMAgentOption func(*LLMAgent)
@@ -169,14 +151,14 @@ func WithModel(model types.Model) LLMAgentOption {
 }
 
 // WithInstruction sets the instruction for the agent.
-func WithInstruction[T string | InstructionProvider](instruction T) LLMAgentOption {
+func WithInstruction[T string | types.InstructionProvider](instruction T) LLMAgentOption {
 	return func(a *LLMAgent) {
 		a.instruction = instruction
 	}
 }
 
 // WithGlobalInstruction sets the global instruction for the agent.
-func WithGlobalInstruction[T string | InstructionProvider](instruction T) LLMAgentOption {
+func WithGlobalInstruction[T string | types.InstructionProvider](instruction T) LLMAgentOption {
 	return func(a *LLMAgent) {
 		a.globalInstruction = instruction
 	}
@@ -225,7 +207,7 @@ func WithDisallowTransferToPeers(disallow bool) LLMAgentOption {
 }
 
 // WithIncludeContents sets the [IncludeContents] for the agent.
-func WithIncludeContents(includeContents IncludeContents) LLMAgentOption {
+func WithIncludeContents(includeContents types.IncludeContents) LLMAgentOption {
 	return func(a *LLMAgent) {
 		a.includeContents = includeContents
 	}
@@ -274,28 +256,28 @@ func WithExamples(examples any) LLMAgentOption {
 }
 
 // WithBeforeModelCallback adds a callback to run before sending a request to the model.
-func WithBeforeModelCallback(callback BeforeModelCallback) LLMAgentOption {
+func WithBeforeModelCallback(callback types.BeforeModelCallback) LLMAgentOption {
 	return func(a *LLMAgent) {
 		a.beforeModelCallbacks = append(a.beforeModelCallbacks, callback)
 	}
 }
 
 // WithAfterModelCallback adds a callback to run after receiving a response from the model.
-func WithAfterModelCallback(callback AfterModelCallback) LLMAgentOption {
+func WithAfterModelCallback(callback types.AfterModelCallback) LLMAgentOption {
 	return func(a *LLMAgent) {
 		a.afterModelCallbacks = append(a.afterModelCallbacks, callback)
 	}
 }
 
 // WithBeforeToolCallback adds a callback to run before executing a tool.
-func WithBeforeToolCallback(callback BeforeToolCallback) LLMAgentOption {
+func WithBeforeToolCallback(callback types.BeforeToolCallback) LLMAgentOption {
 	return func(a *LLMAgent) {
 		a.beforeToolCallbacks = append(a.beforeToolCallbacks, callback)
 	}
 }
 
 // WithAfterToolCallback adds a callback to run after executing a tool.
-func WithAfterToolCallback(callback AfterToolCallback) LLMAgentOption {
+func WithAfterToolCallback(callback types.AfterToolCallback) LLMAgentOption {
 	return func(a *LLMAgent) {
 		a.afterToolCallbacks = append(a.afterToolCallbacks, callback)
 	}
@@ -380,7 +362,7 @@ func (a *LLMAgent) CanonicalInstructions(rctx *types.ReadOnlyContext) string {
 	switch inst := a.instruction.(type) {
 	case string:
 		return inst
-	case InstructionProvider:
+	case types.InstructionProvider:
 		return inst(rctx)
 	default:
 		return ""
@@ -394,7 +376,7 @@ func (a *LLMAgent) CanonicalGlobalInstruction(rctx *types.ReadOnlyContext) (stri
 	switch ginst := a.globalInstruction.(type) {
 	case string:
 		return ginst, false
-	case InstructionProvider:
+	case types.InstructionProvider:
 		return ginst(rctx), true
 	default:
 		return "", false
@@ -427,9 +409,9 @@ func (a *LLMAgent) parseTool(tool any, rctx *types.ReadOnlyContext) []types.Tool
 
 func (a *LLMAgent) llmFlow() types.Flow {
 	if a.disallowTransferToParent && a.disallowTransferToPeers && len(a.base.SubAgents()) == 0 {
-		return llmprocessor.NewSingleFlow()
+		return llmflow.NewSingleFlow()
 	}
-	return llmprocessor.NewAutoFlow()
+	return llmflow.NewAutoFlow()
 }
 
 // saveOutputToState saves the model output to state if needed.
@@ -467,13 +449,13 @@ func (a *LLMAgent) DisallowTransferToParent() bool {
 	return a.disallowTransferToParent
 }
 
-// disallowTransferToPeers reports whether teh disallows LLM-controlled transferring to the peer agents.
+// DisallowTransferToPeers reports whether teh disallows LLM-controlled transferring to the peer agents.
 func (a *LLMAgent) DisallowTransferToPeers() bool {
 	return a.disallowTransferToPeers
 }
 
 // IncludeContents returns the mode of include contents in the model request.
-func (a *LLMAgent) IncludeContents() IncludeContents {
+func (a *LLMAgent) IncludeContents() types.IncludeContents {
 	return a.includeContents
 }
 
@@ -505,28 +487,28 @@ func (a *LLMAgent) CodeExecutor() types.CodeExecutor {
 // BeforeModelCallbacks returns the resolved self.before_model_callback field as a list of _SingleBeforeModelCallback.
 //
 // This method is only for use by Agent Development Kit.
-func (a *LLMAgent) BeforeModelCallbacks() []BeforeModelCallback {
+func (a *LLMAgent) BeforeModelCallbacks() []types.BeforeModelCallback {
 	return a.beforeModelCallbacks
 }
 
 // AfterModelCallbacks returns the resolved self.before_tool_callback field as a list of BeforeToolCallback.
 //
 // This method is only for use by Agent Development Kit.
-func (a *LLMAgent) AfterModelCallbacks() []AfterModelCallback {
+func (a *LLMAgent) AfterModelCallbacks() []types.AfterModelCallback {
 	return a.afterModelCallbacks
 }
 
 // BeforeToolCallbacks returns the resolved self.before_tool_callback field as a list of BeforeToolCallback.
 //
 // This method is only for use by Agent Development Kit.
-func (a *LLMAgent) BeforeToolCallback() []BeforeToolCallback {
+func (a *LLMAgent) BeforeToolCallback() []types.BeforeToolCallback {
 	return a.beforeToolCallbacks
 }
 
 // AfterToolCallbacks returns the resolved self.after_tool_callback field as a list of AfterToolCallback.
 //
 // This method is only for use by Agent Development Kit.
-func (a *LLMAgent) AfterToolCallbacks() []AfterToolCallback {
+func (a *LLMAgent) AfterToolCallbacks() []types.AfterToolCallback {
 	return a.afterToolCallbacks
 }
 

@@ -24,6 +24,11 @@ type LoopAgent struct {
 
 var _ types.Agent = (*LoopAgent)(nil)
 
+// AsLLMAgent implements [types.Agent].
+func (a *LoopAgent) AsLLMAgent() (types.LLMAgent, bool) {
+	return nil, false
+}
+
 // WithMaxIterations sets the maximum number of iterations.
 func (a *LoopAgent) WithMaxIterations(maxIterations int) *LoopAgent {
 	a.maxIterations = maxIterations

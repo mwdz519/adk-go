@@ -17,7 +17,6 @@ import (
 	"github.com/google/uuid"
 	"google.golang.org/genai"
 
-	"github.com/go-a2a/adk-go/agent"
 	"github.com/go-a2a/adk-go/internal/pool"
 	"github.com/go-a2a/adk-go/internal/xmaps"
 	"github.com/go-a2a/adk-go/types"
@@ -137,7 +136,7 @@ func HandleFunctionCalls(ctx context.Context, ictx *types.InvocationContext, fun
 	default:
 	}
 
-	llmAgent, ok := ictx.Agent.(*agent.LLMAgent)
+	llmAgent, ok := ictx.Agent.AsLLMAgent()
 	if !ok {
 		return nil, nil
 	}
@@ -246,7 +245,7 @@ func HandleFunctionCallsLive(ctx context.Context, ictx *types.InvocationContext,
 	default:
 	}
 
-	llmAgent, ok := ictx.Agent.(*agent.LLMAgent)
+	llmAgent, ok := ictx.Agent.AsLLMAgent()
 	if !ok {
 		return nil, nil
 	}

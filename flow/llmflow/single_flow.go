@@ -7,6 +7,28 @@ import (
 	"github.com/go-a2a/adk-go/types"
 )
 
+// SingleFlow is the LLM flows that handles tools calls.
+//
+// A single flow only consider an agent itself and tools.
+// No sub-agents are allowed for single flow.
+type SingleFlow struct {
+	*LLMFlow
+}
+
+var _ types.Flow = (*SingleFlow)(nil)
+
+// NewSingleFlow creates a new [SingleFlow] with the default [types.LLMRequestProcessor] and [types.LLMResponseProcessor].
+func NewSingleFlow() *SingleFlow {
+	flow := &SingleFlow{
+		LLMFlow: NewLLMFlow(),
+	}
+	flow.LLMFlow.WithRequestProcessors(SingleRequestProcessor()...)
+	flow.LLMFlow.WithResponseProcessors(SingleResponseProcessor()...)
+
+	return flow
+}
+
+// SingleRequestProcessor returns the default [types.LLMRequestProcessor] for [SingleFlow].
 func SingleRequestProcessor() []types.LLMRequestProcessor {
 	return []types.LLMRequestProcessor{
 		&BasicLlmRequestProcessor{},
@@ -24,6 +46,7 @@ func SingleRequestProcessor() []types.LLMRequestProcessor {
 	}
 }
 
+// SingleResponseProcessor returns the default [types.LLMResponseProcessor] for [SingleFlow].
 func SingleResponseProcessor() []types.LLMResponseProcessor {
 	return []types.LLMResponseProcessor{
 		&NLPlanningResponseProcessor{},

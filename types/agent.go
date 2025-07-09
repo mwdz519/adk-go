@@ -79,4 +79,102 @@ type Agent interface {
 
 	// FindSubAgent finds the agent with the given name in this agent's descendants.
 	FindSubAgent(name string) Agent
+
+	// AsLLMAgent reports whether this agent is an [LLMAgent].
+	AsLLMAgent() (LLMAgent, bool)
+}
+
+// InstructionProvider is a function that provides instructions based on context.
+type InstructionProvider func(rctx *ReadOnlyContext) string
+
+// BeforeModelCallback is called before sending a request to the model.
+type BeforeModelCallback func(cctx *CallbackContext, request *LLMRequest) (*LLMResponse, error)
+
+// AfterModelCallback is called after receiving a response from the model.
+type AfterModelCallback func(cctx *CallbackContext, response *LLMResponse) (*LLMResponse, error)
+
+// BeforeToolCallback is called before executing a tool.
+type BeforeToolCallback func(tool Tool, args map[string]any, toolCtx *ToolContext) (map[string]any, error)
+
+// AfterToolCallback is called after executing a tool.
+type AfterToolCallback func(tool Tool, args map[string]any, toolCtx *ToolContext, toolResponse map[string]any) (map[string]any, error)
+
+// IncludeContents whether to include contents in the model request.
+type IncludeContents string
+
+const (
+	IncludeContentsDefault IncludeContents = "default"
+	IncludeContentsNone    IncludeContents = "none"
+)
+
+// LLMAgent is an interface for agents that are specifically designed to work with LLMs (Large Language Models).
+type LLMAgent interface {
+	Agent
+
+	// CanonicalModel returns the resolved model field as [model.Model].
+	//
+	// This method is only for use by Agent Development Kit.
+	CanonicalModel(ctx context.Context) (Model, error)
+
+	// CanonicalInstructions returns the resolved self.instruction field to construct instruction for this agent.
+	//
+	// This method is only for use by Agent Development Kit.
+	CanonicalInstructions(rctx *ReadOnlyContext) string
+
+	// CanonicalGlobalInstruction returns the resolved self.instruction field to construct global instruction.
+	//
+	// This method is only for use by Agent Development Kit.
+	CanonicalGlobalInstruction(rctx *ReadOnlyContext) (string, bool)
+
+	// CanonicalTool returns the resolved tools field as a list of [Tool] based on the context.
+	//
+	// This method is only for use by Agent Development Kit.
+	CanonicalTool(rctx *ReadOnlyContext) []Tool
+
+	// GenerateContentConfig returns the [*genai.GenerateContentConfig] for [LLMAgent] agent.
+	GenerateContentConfig() *genai.GenerateContentConfig
+
+	// DisallowTransferToParent reports whether teh disallows LLM-controlled transferring to the parent agent.
+	DisallowTransferToParent() bool
+
+	// DisallowTransferToPeers reports whether teh disallows LLM-controlled transferring to the peer agents.
+	DisallowTransferToPeers() bool
+
+	// IncludeContents returns the mode of include contents in the model request.
+	IncludeContents() IncludeContents
+
+	// InputSchema returns the structured input.
+	InputSchema() *genai.Schema
+
+	// OutputSchema returns the structured output.
+	OutputSchema() *genai.Schema
+
+	// OutputKey returns the key in session state to store the output of the agent.
+	OutputKey() string
+
+	// Planner returns the instructs the agent to make a plan and execute it step by step.
+	Planner() Planner
+
+	// CodeExecutor returns the code executor for the agent.
+	CodeExecutor() CodeExecutor
+
+	// BeforeModelCallbacks returns the resolved self.before_model_callback field as a list of _SingleBeforeModelCallback.
+	//
+	// This method is only for use by Agent Development Kit.
+	BeforeModelCallbacks() []BeforeModelCallback
+
+	// AfterModelCallbacks returns the resolved self.before_tool_callback field as a list of BeforeToolCallback.
+	//
+	// This method is only for use by Agent Development Kit.
+	AfterModelCallbacks() []AfterModelCallback
+
+	// BeforeToolCallbacks returns the resolved self.before_tool_callback field as a list of BeforeToolCallback.
+	//
+	// This method is only for use by Agent Development Kit.
+	BeforeToolCallback() []BeforeToolCallback
+
+	// AfterToolCallbacks returns the resolved self.after_tool_callback field as a list of AfterToolCallback.
+	//
+	// This method is only for use by Agent Development Kit.
+	AfterToolCallbacks() []AfterToolCallback
 }

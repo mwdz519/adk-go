@@ -14,7 +14,6 @@ import (
 	deepcopy "github.com/tiendc/go-deepcopy"
 	"google.golang.org/genai"
 
-	"github.com/go-a2a/adk-go/agent"
 	"github.com/go-a2a/adk-go/internal/xiter"
 	"github.com/go-a2a/adk-go/model"
 	"github.com/go-a2a/adk-go/types"
@@ -29,12 +28,12 @@ var _ types.LLMRequestProcessor = (*ContentLLMRequestProcessor)(nil)
 // Run implements [LLMRequestProcessor].
 func (cp *ContentLLMRequestProcessor) Run(ctx context.Context, ictx *types.InvocationContext, request *types.LLMRequest) iter.Seq2[*types.Event, error] {
 	return func(yield func(*types.Event, error) bool) {
-		llmAgent, ok := ictx.Agent.(*agent.LLMAgent)
+		llmAgent, ok := ictx.Agent.AsLLMAgent()
 		if !ok {
 			return
 		}
 
-		if llmAgent.IncludeContents() != agent.IncludeContentsNone {
+		if llmAgent.IncludeContents() != types.IncludeContentsNone {
 			contents, err := cp.getContents(ictx.Branch, ictx.Session.Events(), llmAgent.Name())
 			if err != nil {
 				xiter.Error[*types.Event](err)

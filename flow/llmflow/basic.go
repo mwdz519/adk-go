@@ -9,7 +9,6 @@ import (
 
 	"google.golang.org/genai"
 
-	"github.com/go-a2a/adk-go/agent"
 	"github.com/go-a2a/adk-go/types"
 )
 
@@ -22,7 +21,7 @@ var _ types.LLMRequestProcessor = (*BasicLlmRequestProcessor)(nil)
 // Run implements [LLMRequestProcessor].
 func (f *BasicLlmRequestProcessor) Run(ctx context.Context, ictx *types.InvocationContext, request *types.LLMRequest) iter.Seq2[*types.Event, error] {
 	return func(yield func(*types.Event, error) bool) {
-		llmAgent, ok := ictx.Agent.(*agent.LLMAgent)
+		llmAgent, ok := ictx.Agent.AsLLMAgent()
 		if !ok {
 			return
 		}

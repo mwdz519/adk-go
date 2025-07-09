@@ -25,6 +25,11 @@ type ParallelAgent struct {
 
 var _ types.Agent = (*ParallelAgent)(nil)
 
+// AsLLMAgent implements [types.Agent].
+func (a *ParallelAgent) AsLLMAgent() (types.LLMAgent, bool) {
+	return nil, false
+}
+
 // NewParallelAgent creates a new parallel agent with the given name and options.
 func NewParallelAgent(name string, agents ...types.Agent) *ParallelAgent {
 	return &ParallelAgent{

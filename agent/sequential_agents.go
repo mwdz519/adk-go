@@ -22,6 +22,11 @@ type SequentialAgent struct {
 
 var _ types.Agent = (*SequentialAgent)(nil)
 
+// AsLLMAgent implements [types.Agent].
+func (a *SequentialAgent) AsLLMAgent() (types.LLMAgent, bool) {
+	return nil, false
+}
+
 // WithAgents sets the agents for the sequential agent.
 func (a *SequentialAgent) WithAgents(agents ...types.Agent) *SequentialAgent {
 	a.agents = agents

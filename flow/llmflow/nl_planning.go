@@ -7,7 +7,6 @@ import (
 	"context"
 	"iter"
 
-	"github.com/go-a2a/adk-go/agent"
 	"github.com/go-a2a/adk-go/planner"
 	"github.com/go-a2a/adk-go/types"
 )
@@ -76,7 +75,7 @@ func (p *NLPlanningResponseProcessor) Run(ctx context.Context, ictx *types.Invoc
 }
 
 func getPlanner(ictx *types.InvocationContext) types.Planner {
-	llmAgent, ok := ictx.Agent.(*agent.LLMAgent)
+	llmAgent, ok := ictx.Agent.AsLLMAgent()
 	if !ok {
 		return nil
 	}

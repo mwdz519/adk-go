@@ -13,7 +13,6 @@ import (
 	"strings"
 	"unicode"
 
-	"github.com/go-a2a/adk-go/agent"
 	"github.com/go-a2a/adk-go/types"
 )
 
@@ -25,7 +24,7 @@ var _ types.LLMRequestProcessor = (*InstructionsLlmRequestProcessor)(nil)
 // Run implements [LLMRequestProcessor].
 func (p *InstructionsLlmRequestProcessor) Run(ctx context.Context, ictx *types.InvocationContext, request *types.LLMRequest) iter.Seq2[*types.Event, error] {
 	return func(yield func(*types.Event, error) bool) {
-		llmAgent, ok := ictx.Agent.(*agent.LLMAgent)
+		llmAgent, ok := ictx.Agent.AsLLMAgent()
 		if !ok {
 			return
 		}
@@ -33,7 +32,7 @@ func (p *InstructionsLlmRequestProcessor) Run(ctx context.Context, ictx *types.I
 		rootAgent := llmAgent.RootAgent()
 
 		// Appends global instructions if set.
-		if rootAgent, ok := rootAgent.(*agent.LLMAgent); ok {
+		if rootAgent, ok := rootAgent.AsLLMAgent(); ok {
 			rawSI, bypassStateInjection := rootAgent.CanonicalGlobalInstruction(types.NewReadOnlyContext(ictx))
 			si := rawSI
 			_ = si

@@ -13,7 +13,6 @@ import (
 	"runtime"
 	"time"
 
-	"github.com/go-a2a/adk-go/agent"
 	"github.com/go-a2a/adk-go/internal/xiter"
 	"github.com/go-a2a/adk-go/model"
 	"github.com/go-a2a/adk-go/types"
@@ -361,7 +360,7 @@ func (f *LLMFlow) runOneStep(ctx context.Context, ic *types.InvocationContext) i
 
 func (f *LLMFlow) preprocess(ctx context.Context, ic *types.InvocationContext, request *types.LLMRequest) iter.Seq2[*types.Event, error] {
 	return func(yield func(*types.Event, error) bool) {
-		llmAgent, ok := ic.Agent.(*agent.LLMAgent)
+		llmAgent, ok := ic.Agent.AsLLMAgent()
 		if !ok {
 			return
 		}
@@ -620,7 +619,7 @@ func (f *LLMFlow) callLLM(ctx context.Context, ic *types.InvocationContext, requ
 
 // handleBeforeModelCallback processes callbacks that should run before the model has generated a response.
 func (f *LLMFlow) handleBeforeModelCallback(ctx context.Context, ic *types.InvocationContext, request *types.LLMRequest, modelResponseEvent *types.Event) (*types.LLMResponse, error) {
-	llmAgent, ok := ic.Agent.(*agent.LLMAgent)
+	llmAgent, ok := ic.Agent.AsLLMAgent()
 	if !ok {
 		return nil, nil
 	}
@@ -645,7 +644,7 @@ func (f *LLMFlow) handleBeforeModelCallback(ctx context.Context, ic *types.Invoc
 
 // handleAfterModelCallback processes callbacks that should run after the model has generated a response.
 func (f *LLMFlow) handleAfterModelCallback(ctx context.Context, ic *types.InvocationContext, response *types.LLMResponse, modelResponseEvent *types.Event) (*types.LLMResponse, error) {
-	llmAgent, ok := ic.Agent.(*agent.LLMAgent)
+	llmAgent, ok := ic.Agent.AsLLMAgent()
 	if !ok {
 		return nil, nil
 	}
@@ -680,7 +679,8 @@ func (f *LLMFlow) finalizeModelResponseEvent(ctx context.Context, request *types
 
 // getLLM extracts the LLM model from the invocation context
 func (f *LLMFlow) getLLM(ctx context.Context, ic *types.InvocationContext) types.Model {
-	model, err := ic.Agent.(*agent.LLMAgent).CanonicalModel(ctx)
+	llmAgent, _ := ic.Agent.AsLLMAgent()
+	model, err := llmAgent.CanonicalModel(ctx)
 	if err != nil {
 		panic(fmt.Errorf("LLMFlow.getLLM: %w", err))
 	}

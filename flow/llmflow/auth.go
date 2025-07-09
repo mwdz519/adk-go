@@ -10,7 +10,6 @@ import (
 
 	"github.com/go-json-experiment/json"
 
-	"github.com/go-a2a/adk-go/agent"
 	"github.com/go-a2a/adk-go/internal/pool"
 	"github.com/go-a2a/adk-go/internal/xiter"
 	"github.com/go-a2a/adk-go/types"
@@ -40,7 +39,7 @@ func NewAuthPreprocessor() *AuthLLMRequestProcessor {
 // Run implements [types.LLMRequestProcessor].
 func (p *AuthLLMRequestProcessor) Run(ctx context.Context, ictx *types.InvocationContext, request *types.LLMRequest) iter.Seq2[*types.Event, error] {
 	return func(yield func(*types.Event, error) bool) {
-		llmAgent, ok := ictx.Agent.(*agent.LLMAgent)
+		llmAgent, ok := ictx.Agent.AsLLMAgent()
 		if !ok {
 			return
 		}

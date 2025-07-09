@@ -15,7 +15,6 @@ import (
 
 	"google.golang.org/genai"
 
-	"github.com/go-a2a/adk-go/agent"
 	"github.com/go-a2a/adk-go/codeexecutor"
 	"github.com/go-a2a/adk-go/internal/xiter"
 	"github.com/go-a2a/adk-go/internal/xmaps"
@@ -87,7 +86,7 @@ var _ types.LLMRequestProcessor = (*CodeExecutionRequestProcessor)(nil)
 // Run implements [types.LLMRequestProcessor].
 func (p *CodeExecutionRequestProcessor) Run(ctx context.Context, ictx *types.InvocationContext, request *types.LLMRequest) iter.Seq2[*types.Event, error] {
 	return func(yield func(*types.Event, error) bool) {
-		llmAgent, ok := ictx.Agent.(*agent.LLMAgent)
+		llmAgent, ok := ictx.Agent.AsLLMAgent()
 		if !ok {
 			return
 		}
@@ -100,7 +99,7 @@ func (p *CodeExecutionRequestProcessor) Run(ctx context.Context, ictx *types.Inv
 // runPreProcessor pre-process the user message by adding the user message to the Colab notebook.
 func (p *CodeExecutionRequestProcessor) runPreProcessor(ctx context.Context, ictx *types.InvocationContext, request *types.LLMRequest) iter.Seq2[*types.Event, error] {
 	return func(yield func(*types.Event, error) bool) {
-		llmAgent, ok := ictx.Agent.(*agent.LLMAgent)
+		llmAgent, ok := ictx.Agent.AsLLMAgent()
 		if !ok {
 			return
 		}
@@ -216,7 +215,7 @@ func (p *CodeExecutionResponseProcessor) Run(ctx context.Context, ictx *types.In
 // runPostProcessor post-process the model response by extracting and executing the first code block.
 func (p *CodeExecutionResponseProcessor) runPostProcessor(ctx context.Context, ictx *types.InvocationContext, response *types.LLMResponse) iter.Seq2[*types.Event, error] {
 	return func(yield func(*types.Event, error) bool) {
-		llmAgent, ok := ictx.Agent.(*agent.LLMAgent)
+		llmAgent, ok := ictx.Agent.AsLLMAgent()
 		if !ok {
 			return
 		}
@@ -316,7 +315,7 @@ func (p *CodeExecutionRequestProcessor) extractAndReplaceInlineFiles(codeExecuto
 
 // getOrSetExecutionID returns the ID for stateful code execution or None if not stateful.
 func getOrSetExecutionID(ictx *types.InvocationContext, codeExecutorContext *codeexecutor.CodeExecutorContext) string {
-	llmAgent, ok := ictx.Agent.(*agent.LLMAgent)
+	llmAgent, ok := ictx.Agent.AsLLMAgent()
 	if !ok {
 		return ""
 	}

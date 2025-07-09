@@ -9,7 +9,6 @@ import (
 	"iter"
 	"strings"
 
-	"github.com/go-a2a/adk-go/agent"
 	"github.com/go-a2a/adk-go/tool/tools"
 	"github.com/go-a2a/adk-go/types"
 )
@@ -22,7 +21,7 @@ var _ types.LLMRequestProcessor = (*AgentTransferLlmRequestProcessor)(nil)
 // Run implements [LLMRequestProcessor].
 func (rp *AgentTransferLlmRequestProcessor) Run(ctx context.Context, ictx *types.InvocationContext, request *types.LLMRequest) iter.Seq2[*types.Event, error] {
 	return func(yield func(*types.Event, error) bool) {
-		llmAgent, ok := ictx.Agent.(*agent.LLMAgent)
+		llmAgent, ok := ictx.Agent.AsLLMAgent()
 		if !ok {
 			return
 		}
@@ -55,7 +54,7 @@ Agent description: %s
 `, targetAgent.Name(), targetAgent.Description())
 }
 
-func (rp *AgentTransferLlmRequestProcessor) buildTargetAgentsInstructions(llmAgent *agent.LLMAgent, targetAgents []types.Agent) string {
+func (rp *AgentTransferLlmRequestProcessor) buildTargetAgentsInstructions(llmAgent types.LLMAgent, targetAgents []types.Agent) string {
 	targetAgentsInfos := make([]string, len(targetAgents))
 	for i, targetAgent := range targetAgents {
 		targetAgentsInfos[i] = rp.buildTargetAgentsInfo(targetAgent)
@@ -87,10 +86,10 @@ to your parent agent. If you don't have parent agent, try answer by yourself.
 	return sysInst
 }
 
-func (rp *AgentTransferLlmRequestProcessor) getTransferTargets(llmAgent *agent.LLMAgent) []types.Agent {
+func (rp *AgentTransferLlmRequestProcessor) getTransferTargets(llmAgent types.LLMAgent) []types.Agent {
 	agents := llmAgent.SubAgents()
 
-	if _, ok := llmAgent.ParentAgent().(*agent.LLMAgent); !ok {
+	if _, ok := llmAgent.ParentAgent().AsLLMAgent(); !ok {
 		return agents
 	}
 

@@ -19,6 +19,11 @@ type BaseAgent struct {
 
 var _ Agent = (*BaseAgent)(nil)
 
+// AsLLMAgent implements [types.Agent].
+func (a *BaseAgent) AsLLMAgent() (LLMAgent, bool) {
+	return nil, false
+}
+
 // NewBaseAgent creates a new agent configuration with the given name.
 //
 // TODO(zchee): implements validate logic same as belows in adk-python.
