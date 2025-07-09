@@ -111,9 +111,12 @@ func (m *Claude) partToMessageBlock(part *genai.Part) (anthropic.ContentBlockPar
 
 	case part.FunctionResponse != nil:
 		funcResp := part.FunctionResponse
-		if result, ok := funcResp.Response["result"]; ok {
-			params := anthropic.NewToolResultBlock(funcResp.ID, fmt.Sprintf("%s", result), false)
+		if content, ok := funcResp.Response["result"]; ok {
+			params := anthropic.NewToolResultBlock(funcResp.ID)
 			params.OfToolResult.Type = constant.ValueOf[constant.ToolResult]().Default()
+			params.OfToolResult.Content = append(params.OfToolResult.Content, anthropic.ToolResultBlockParamContentUnion{
+				OfText: anthropic.NewTextBlock(content.(string)).OfText,
+			})
 			return params, nil
 		}
 	}
