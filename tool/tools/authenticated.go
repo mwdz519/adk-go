@@ -23,7 +23,7 @@ type AuthenticatedTool struct {
 	*tool.Tool
 
 	Logger                  *slog.Logger
-	credentialsManager      *types.CredentialManager
+	CredentialsManager      *types.CredentialManager
 	responseForAuthRequired map[string]any
 }
 
@@ -51,7 +51,7 @@ func NewAuthenticatedTool(name, description string, authConfig *types.AuthConfig
 	}
 
 	if authConfig != nil && authConfig.AuthScheme != nil {
-		at.credentialsManager = types.NewCredentialManager(authConfig)
+		at.CredentialsManager = types.NewCredentialManager(authConfig)
 	} else {
 		at.Logger.Warn("authConfig or authConfig.AuthScheme is missing. Will skip authentication. Using FunctionTool instead if authentication is not required")
 	}
@@ -77,14 +77,14 @@ func (t *AuthenticatedTool) IsLongRunning() bool {
 // Run implements [types.AuthenticatedTool].
 func (t *AuthenticatedTool) Run(ctx context.Context, args map[string]any, toolCtx *types.ToolContext) (any, error) {
 	var credential *types.AuthCredential
-	if t.credentialsManager != nil {
+	if t.CredentialsManager != nil {
 		var err error
-		credential, err = t.credentialsManager.GetAuthCredential(ctx, toolCtx)
+		credential, err = t.CredentialsManager.GetAuthCredential(ctx, toolCtx)
 		if err != nil {
 			return nil, err
 		}
 		if credential == nil {
-			t.credentialsManager.RequestCredential(ctx, toolCtx)
+			t.CredentialsManager.RequestCredential(ctx, toolCtx)
 			return t.responseForAuthRequired, nil
 		}
 	}
