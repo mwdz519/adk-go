@@ -44,6 +44,11 @@ func NewCredentialManager(authConfig *AuthConfig) *CredentialManager {
 	return cm
 }
 
+// AuthConfig returns the [AuthConfig] used by the [CredentialManager].
+func (cm *CredentialManager) AuthConfig() *AuthConfig {
+	return cm.authConfig
+}
+
 // RegisterCredentialExchanger register a credential exchanger for a credential type.
 func (cm *CredentialManager) RegisterCredentialExchanger(ctx context.Context, credentialType AuthCredentialTypes, exchanger CredentialExchanger) {
 	cm.exchangerRegistry.Register(credentialType, exchanger)
