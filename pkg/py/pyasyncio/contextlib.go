@@ -21,7 +21,7 @@ type AsyncContextManager interface {
 	// AExit is called when exiting the async context.
 	// The exc parameter contains any error that occurred in the context.
 	// Returns true if the error should be suppressed, false otherwise.
-	AExit(ctx context.Context, exc error) (bool, error)
+	AExit(ctx context.Context, err error) (bool, error)
 }
 
 // ContextManager represents a synchronous context manager.
@@ -33,7 +33,7 @@ type ContextManager interface {
 	// Exit is called when exiting the context.
 	// The exc parameter contains any error that occurred in the context.
 	// Returns true if the error should be suppressed, false otherwise.
-	Exit(exc error) (bool, error)
+	Exit(err error) (bool, error)
 }
 
 // exitCallback represents a callback to be executed on exit.
@@ -101,8 +101,8 @@ func (s *AsyncExitStack) AEnter(ctx context.Context) (any, error) {
 
 // AExit implements the AsyncContextManager interface.
 // It unwinds the callback stack, calling all registered exit callbacks.
-func (s *AsyncExitStack) AExit(ctx context.Context, exc error) (bool, error) {
-	return s.unwindStack(ctx, exc)
+func (s *AsyncExitStack) AExit(ctx context.Context, err error) (bool, error) {
+	return s.unwindStack(ctx, err)
 }
 
 // EnterAsyncContext enters an async context manager and schedules its exit.
@@ -299,7 +299,7 @@ func (s *AsyncExitStack) AClose(ctx context.Context) error {
 
 // unwindStack calls all callbacks in reverse order (LIFO).
 // It properly handles both sync and async callbacks and error propagation.
-func (s *AsyncExitStack) unwindStack(ctx context.Context, exc error) (bool, error) {
+func (s *AsyncExitStack) unwindStack(ctx context.Context, err error) (bool, error) {
 	s.mu.Lock()
 	if s.closed {
 		s.mu.Unlock()
@@ -314,7 +314,7 @@ func (s *AsyncExitStack) unwindStack(ctx context.Context, exc error) (bool, erro
 
 	// Track if any exit handler suppressed the exception
 	suppressed := false
-	pendingExc := exc
+	pendingExc := err
 
 	// Process callbacks in reverse order (LIFO)
 	for i := len(callbacks) - 1; i >= 0; i-- {
@@ -401,8 +401,8 @@ func (f *contextManagerFunc) Enter() (any, error) {
 	return f.enter()
 }
 
-func (f *contextManagerFunc) Exit(exc error) (bool, error) {
-	return f.exit(exc)
+func (f *contextManagerFunc) Exit(err error) (bool, error) {
+	return f.exit(err)
 }
 
 // NewContextManager creates a ContextManager from enter and exit functions.

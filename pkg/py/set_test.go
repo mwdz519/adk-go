@@ -20,7 +20,7 @@ import (
 	"reflect"
 	"testing"
 
-	"github.com/go-a2a/adk-go/types/py"
+	"github.com/go-a2a/adk-go/pkg/py"
 )
 
 func TestSet(t *testing.T) {

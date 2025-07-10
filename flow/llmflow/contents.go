@@ -16,8 +16,8 @@ import (
 
 	"github.com/go-a2a/adk-go/internal/xiter"
 	"github.com/go-a2a/adk-go/model"
+	"github.com/go-a2a/adk-go/pkg/py"
 	"github.com/go-a2a/adk-go/types"
-	"github.com/go-a2a/adk-go/types/py"
 )
 
 // ContentLLMRequestProcessor builds the contents for the LLM request.

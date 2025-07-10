@@ -8,7 +8,7 @@ import (
 
 	"google.golang.org/genai"
 
-	"github.com/go-a2a/adk-go/types/py/pyasyncio"
+	"github.com/go-a2a/adk-go/pkg/py/pyasyncio"
 )
 
 // LiveRequest represents a request send to live agents.

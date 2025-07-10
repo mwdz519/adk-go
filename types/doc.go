@@ -243,65 +243,6 @@
 //		ProcessPlanningResponse(ctx context.Context, cctx *CallbackContext, responseParts []*genai.Part) []*genai.Part
 //	}
 //
-// # Python Compatibility
-//
-// The types/py subpackage provides Go implementations of Python patterns:
-//
-//	// Python-style sets
-//	set := py.NewSet[string]()
-//	set.Add("item1", "item2")
-//
-//	// Python asyncio patterns
-//	task := pyasyncio.CreateTask(ctx, asyncFunction)
-//	result, err := task.Result(ctx)
-//
-// # Iterator Patterns
-//
-// The ADK extensively uses Go 1.23+ iterators for streaming:
-//
-//	for event, err := range agent.Run(ctx, ictx) {
-//		if err != nil {
-//			// Handle error
-//			continue
-//		}
-//		// Process event
-//	}
-//
-// # Error Handling
-//
-// The package defines specific error types for different scenarios:
-//
-//	type ExecutionError struct {
-//		Message   string
-//		Attempts  int
-//		LastError error
-//	}
-//
-//	type AuthenticationError struct {
-//		Type    AuthType
-//		Message string
-//	}
-//
-// # Thread Safety
-//
-// All interfaces are designed to be safe for concurrent use. Implementations
-// should provide appropriate synchronization where needed.
-//
-// # Integration Patterns
-//
-// The types package enables flexible composition patterns:
-//
-//	// Agent hierarchies
-//	coordinator := NewSequentialAgent("coordinator",
-//		researcher, analyzer, reporter)
-//
-//	// Tool composition
-//	toolset := NewToolset("data_tools",
-//		searchTool, analysisTool, visualizationTool)
-//
-//	// Service injection
-//	ictx := NewInvocationContext(session, sessionService, artifactService, credentialService)
-//
 // # Best Practices
 //
 // When implementing these interfaces:

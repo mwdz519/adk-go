@@ -12,8 +12,8 @@ import (
 
 	"github.com/go-a2a/adk-go/internal/pool"
 	"github.com/go-a2a/adk-go/internal/xiter"
+	"github.com/go-a2a/adk-go/pkg/py"
 	"github.com/go-a2a/adk-go/types"
-	"github.com/go-a2a/adk-go/types/py"
 )
 
 // AuthLLMRequestProcessor represents a handles auth information to build the LLM request.

@@ -19,8 +19,8 @@ import (
 	"github.com/go-a2a/adk-go/internal/xiter"
 	"github.com/go-a2a/adk-go/internal/xmaps"
 	"github.com/go-a2a/adk-go/model"
+	"github.com/go-a2a/adk-go/pkg/py"
 	"github.com/go-a2a/adk-go/types"
-	"github.com/go-a2a/adk-go/types/py"
 )
 
 // DataFileUtil represents a structure that contains a data file name and its content.

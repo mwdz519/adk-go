@@ -10,7 +10,7 @@ import (
 
 	"google.golang.org/genai"
 
-	"github.com/go-a2a/adk-go/types/py"
+	"github.com/go-a2a/adk-go/pkg/py"
 )
 
 // Event represents an event in a conversation between agents and users.

@@ -156,7 +156,7 @@ Go ADK actually has unique features and advantages:
 1. **Better Type Safety**: Full use of Go generics and strong typing
 2. **Performance**: Native compilation and superior concurrency
 3. **Cleaner Architecture**: Better separation of concerns in package structure
-4. **Python Compatibility**: types/py/ package for Python pattern support
+4. **Python Compatibility**: pkg/py/ package for Python pattern support
 5. **AI Platform Conversions**: types/aiconv/ for platform-specific conversions
 6. **Internal Utilities**: Advanced pool, iterator, and map utilities
 7. **More Comprehensive Tools**: Some tools like get_user_choice, url_context exist only in Go
