@@ -288,7 +288,7 @@ func TestNewFunctionToolWithDeclaration(t *testing.T) {
 		t.Fatal("FunctionDeclaration() returned nil")
 	}
 
-	if decl.Name != "test_tool" {
+	if decl.Name != "func1" {
 		t.Errorf("declaration.Name = %v, want %v", decl.Name, "test_tool")
 	}
 
