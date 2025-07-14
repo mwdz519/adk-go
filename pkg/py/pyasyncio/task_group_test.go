@@ -765,6 +765,8 @@ func TestTaskGroupMixedSuccessFailure(t *testing.T) {
 	successCount := int64(0)
 
 	// Create mix of successful and failing tasks
+	// TODO(zchee): flaky test
+	t.Log("flaky: CreateTask failed: cannot add task to finished task group")
 	for i := range 10 {
 		_, err := tg.CreateTask(func(ctx context.Context) (int, error) {
 			if i%3 == 0 {
