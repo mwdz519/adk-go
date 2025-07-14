@@ -197,7 +197,7 @@ func buildParametersSchema(funcType reflect.Type, config *functionConfig) (*gena
 		properties[paramName] = schema
 
 		// Non-pointer types are required
-		if paramType.Kind() != reflect.Ptr {
+		if paramType.Kind() != reflect.Pointer {
 			required = append(required, paramName)
 		}
 	}
