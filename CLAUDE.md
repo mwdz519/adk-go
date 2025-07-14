@@ -215,8 +215,7 @@ The codebase uses `google.golang.org/genai` as the primary abstraction layer, pr
 - Error handling: return errors, don't panic.
 - Provide real-world examples or code snippets to illustrate solutions.
 - Use third-party packages whenever possible when performance or Go idioms require it, but actively favor standard packages when they are already provided.
-    - Use `github.com/bytedance/sonic` instead of stdlib `encoding/json`
-    - Use `github.com/go-json-experiment/json` instead of stdlib `encoding/json` if you want
+    - Use `github.com/go-json-experiment/json` instead of stdlib `encoding/json`
 - Highlight any considerations, such as potential performance impacts, with advised solutions.
 - Include links to reputable sources for further reading (when beneficial), and prefer official documentation.
     <!-- - Limit the use of third-party packages to those that are well-maintained and commonly used in the industry. -->
