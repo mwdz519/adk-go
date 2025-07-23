@@ -21,7 +21,6 @@ import (
 	anthropic_bedrock "github.com/anthropics/anthropic-sdk-go/bedrock"
 	anthropic_option "github.com/anthropics/anthropic-sdk-go/option"
 	"github.com/anthropics/anthropic-sdk-go/packages/param"
-	"github.com/anthropics/anthropic-sdk-go/shared/constant"
 	anthropic_vertex "github.com/anthropics/anthropic-sdk-go/vertex"
 	"github.com/go-json-experiment/json"
 	"github.com/go-json-experiment/json/jsontext"
@@ -96,7 +95,6 @@ func (m *Claude) partToMessageBlock(part *genai.Part) (anthropic.ContentBlockPar
 	switch {
 	case part.Text != "":
 		params := anthropic.NewTextBlock(part.Text)
-		params.OfText.Type = constant.ValueOf[constant.Text]().Default()
 		return params, nil
 
 	case part.FunctionCall != nil:
@@ -106,17 +104,12 @@ func (m *Claude) partToMessageBlock(part *genai.Part) (anthropic.ContentBlockPar
 			return anthropic.ContentBlockParamUnion{}, errors.New("FunctionCall name is empty")
 		}
 		params := anthropic.NewToolUseBlock(funcCall.ID, funcCall.Args, funcCall.Name)
-		params.OfToolUse.Type = constant.ValueOf[constant.ToolUse]().Default()
 		return params, nil
 
 	case part.FunctionResponse != nil:
 		funcResp := part.FunctionResponse
 		if content, ok := funcResp.Response["result"]; ok {
-			params := anthropic.NewToolResultBlock(funcResp.ID)
-			params.OfToolResult.Type = constant.ValueOf[constant.ToolResult]().Default()
-			params.OfToolResult.Content = append(params.OfToolResult.Content, anthropic.ToolResultBlockParamContentUnion{
-				OfText: anthropic.NewTextBlock(content.(string)).OfText,
-			})
+			params := anthropic.NewToolResultBlock(funcResp.ID, content.(string), false)
 			return params, nil
 		}
 	}
@@ -238,7 +231,6 @@ func (m *Claude) funcDeclarationToToolParam(funcDeclaration *genai.FunctionDecla
 		maps.Insert(properties, maps.All(params.Properties))
 	}
 	inputSchema := anthropic.ToolInputSchemaParam{
-		Type:       constant.ValueOf[constant.Object]().Default(),
 		Properties: properties,
 	}
 
@@ -410,7 +402,6 @@ func (m *Claude) GenerateContent(ctx context.Context, request *types.LLMRequest)
 	if len(request.ToolMap) > 0 {
 		toolchoice := anthropic.ToolChoiceUnionParam{
 			OfAuto: &anthropic.ToolChoiceAutoParam{
-				Type:                   constant.ValueOf[constant.Auto]().Default(),
 				DisableParallelToolUse: anthropic.Bool(false),
 			},
 		}
@@ -488,7 +479,6 @@ func (m *Claude) StreamGenerateContent(ctx context.Context, request *types.LLMRe
 		if len(request.ToolMap) > 0 {
 			toolchoice := anthropic.ToolChoiceUnionParam{
 				OfAuto: &anthropic.ToolChoiceAutoParam{
-					Type:                   constant.ValueOf[constant.Auto]().Default(),
 					DisableParallelToolUse: anthropic.Bool(false),
 				},
 			}
