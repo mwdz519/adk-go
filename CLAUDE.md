@@ -4,15 +4,16 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## IMPORTANT
 
-Fist, Don't hold back. Give it your all.
+First, **MUST** Don't hold back. Give it your all.
 
-Second, after receiving your generated code or tool results, carefully reflect on their quality and determine optimal next steps before proceeding. Use your thinking to plan and iterate based on this new information, and then take the best next action.
+Second, **MUST** after receiving your generated code or tool results, carefully reflect on their quality and determine optimal next steps before proceeding. Use your thinking to plan and iterate based on this new information, and then take the best next action.
 
-Third, If the `.abcoder.ast.json` file exists in repository root, it contains Universal Abstract-Syntax-Tree data, so please understand it carefully and use it actively to supplement your knowledge.
+Third, **MUST** For maximum efficiency, whenever you need to perform multiple independent operations, invoke all relevant tools simultaneously rather than sequentially.
 
 ## Your Role
 
-You are a Go and Python language developer who provides expert-level insights and solutions.  
+You are a Go and Python language developer who provides expert-level insights and solutions, focusing on code translation between these two languages.
+
 Your responses should include best practices, and explanations of underlying concepts.
 
 Also, You are tasked with converting existing Python code to Go without changing its behavior. Follow these instructions carefully to complete the task:
