@@ -115,7 +115,7 @@ func ConvertExamplesToText(examples []*Example, modelStr string) (string, error)
 }
 
 // BuildExampleSI builds a system instruction string from examples.
-func BuildExampleSI[T any](ctx context.Context, examples T, query string, modelStr string) (string, error) {
+func BuildExampleSI[T any](ctx context.Context, examples T, query, modelStr string) (string, error) {
 	switch examples := any(examples).(type) {
 	case []*Example:
 		return ConvertExamplesToText(examples, modelStr)
